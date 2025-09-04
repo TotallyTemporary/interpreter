@@ -1,0 +1,13 @@
+
+# Indentation based blocks.
+
+
+int fib(int times) is
+    if times == 0 or times == 1 then return 1
+    return fib(times - 1) + fib(times - 2)
+
+
+if something == 1 then
+    return 1 # awoo!
+
+

@@ -1,0 +1,195 @@
+from parser.ast_visitor import AstVisitor
+
+class Symbol():
+    def __init__(self, name: str, type: "Symbol" = None):
+        self.name = name
+        self.type = type
+
+    def __repr__(self):
+        return f"Symbol({self.name},{self.type})"
+    
+class FuncSymbol(Symbol):
+    def __init__(self, name: str, type: "Symbol" = None, return_type: "Symbol" = None, arg_symbols: list["Symbol"] = []):
+        super().__init__(name, type)
+        self.return_type = return_type
+        self.arg_symbols = arg_symbols
+
+class TypeSymbol(Symbol):
+    def __init__(self, name: str):
+        super().__init__(name, None)
+
+class SymbolTable():
+    def __init__(self):
+        self.symbols = {}
+
+    def define(self, symbol: Symbol):
+        if symbol.name in self.symbols and self.symbols[symbol.name] is not symbol:
+            raise Exception("Double declaration of symbol.") # TODO better errors
+        self.symbols[symbol.name] = symbol
+
+    def lookup(self, symbol_name: str, error_on_not_found=True) -> Symbol | None:
+        value = self.symbols.get(symbol_name, None)
+
+        if value is None and error_on_not_found:
+            raise Exception("Not found!") # TODO better errors
+        return value
+    
+class ScopedSymbolTable(SymbolTable):
+    def __init__(self, parent: "ScopedSymbolTable" = None):
+        super().__init__()
+        self.parent = parent
+
+    def define(self, symbol: Symbol):
+        super().define(symbol)
+
+    def lookup(self, symbol_name: str, error_on_not_found=True) -> Symbol:
+        value = super().lookup(symbol_name, error_on_not_found=False)
+        if not value and self.parent is not None:
+            value = self.parent.lookup(symbol_name)
+        
+        if value is None and error_on_not_found:
+            raise Exception("Not found!")
+        return value
+
+INT_TYPE = TypeSymbol("int")
+BOOL_TYPE = TypeSymbol("bool")
+FUNC_TYPE = TypeSymbol("__function")
+VOID_TYPE = TypeSymbol("__void")
+
+class TypeChecker(AstVisitor):
+    def __init__(self):
+        self.global_scope = ScopedSymbolTable()
+        self.global_scope.define(INT_TYPE)
+        self.global_scope.define(BOOL_TYPE)
+        self.global_scope.define(FUNC_TYPE)
+        self.global_scope.define(VOID_TYPE)
+
+        # will be set for each function
+        self.local_scope = self.global_scope
+        self.expected_return_value = VOID_TYPE
+        self.any_return_hit = False
+
+    def visit_IntLiteralNode(self, node):
+        return self.global_scope.lookup("int")
+
+    def visit_VariableNode(self, node):
+        var_symbol = self.local_scope.lookup(node.name)
+        node.symbol = var_symbol
+        return var_symbol.type
+
+    def visit_BinOpNode(self, node):
+        type_left = self.visit(node.left)
+        type_right = self.visit(node.right)
+        op = node.op
+
+        expected_operand_type: TypeSymbol
+        output_type: TypeSymbol
+        match op:
+            case '+' | '-' | '*' | '/' | '%':
+                expected_operand_type = INT_TYPE
+                output_type = INT_TYPE
+            case '<' | '<=' | '>' | '>=' | '==' | '!=':
+                # TODO can't compare booleans :P
+                expected_operand_type = INT_TYPE
+                output_type = BOOL_TYPE
+            case 'and' | 'or':
+                expected_operand_type = BOOL_TYPE
+                output_type = BOOL_TYPE
+            case _:
+                raise Exception("What the hell are these binop types")
+
+        if type_left != expected_operand_type or type_right != expected_operand_type:
+            raise Exception(f"Binop operands are wrong type {type_left=} {type_right=} {expected_operand_type=}")
+
+        return output_type
+
+    def visit_ReturnNode(self, node):
+        type_symbol = self.visit(node.expr)
+        if not type_symbol == self.expected_return_value:
+            raise Exception("Returning something way different to what we expected.")
+        self.any_return_hit = True
+        return VOID_TYPE
+
+    def visit_DeclarationNode(self, node):
+        type_symbol = self.local_scope.lookup(node.type)
+        expr_type_symbol = self.visit(node.assign_expr)
+
+        if type_symbol != expr_type_symbol:
+            raise Exception("Declaration expr and type dont match")
+        
+        var_symbol = Symbol(node.name, type_symbol)
+        self.local_scope.define(var_symbol)
+        node.symbol = var_symbol
+
+        return VOID_TYPE
+
+    def visit_AssignmentNode(self, node):
+        var_symbol = self.local_scope.lookup(node.name)
+        expr_type_symbol = self.visit(node.assign_expr)
+
+        if var_symbol.type != expr_type_symbol:
+            raise Exception("Assignment doesnt match")
+        
+        return var_symbol.type
+
+    def visit_BlockStatement(self, node):
+        for child in node.statements:
+            self.visit(child)
+        return VOID_TYPE
+
+    def visit_ParamNode(self, node):
+        type_symbol = self.local_scope.lookup(node.type)
+        
+        var_symbol = Symbol(node.name, type_symbol)
+        self.local_scope.define(var_symbol)
+        node.symbol = var_symbol
+        return VOID_TYPE
+
+    def visit_IfNode(self, node):
+        cond_type = self.visit(node.condition)
+        if cond_type != BOOL_TYPE:
+            raise Exception("If condition must be a boolean")
+        self.visit(node.body)
+        return VOID_TYPE
+
+    def visit_FuncDeclNode(self, node):
+        return_type = self.local_scope.lookup(node.type)
+        func_symbol = FuncSymbol(node.name, FUNC_TYPE, return_type)
+        self.local_scope.define(func_symbol)
+        node.symbol = func_symbol
+
+        # Scoped inside
+        self.local_scope = ScopedSymbolTable(self.local_scope)
+        self.expected_return_value = return_type
+        self.any_return_hit = False
+
+        for param in node.params:
+            self.visit(param)
+
+        func_symbol.arg_symbols = [param.symbol.type for param in node.params]
+        self.visit(node.body)
+
+        if not self.any_return_hit and self.expected_return_value != VOID_TYPE:
+            raise Exception("No return on function. What the hell man.")
+        return VOID_TYPE
+
+    def visit_FuncCallNode(self, node):
+        func_symbol = self.local_scope.lookup(node.name)
+        node.symbol = func_symbol
+
+        if len(node.expressions) != len(func_symbol.arg_symbols):
+            raise Exception("Wrong number of arguments.")
+
+        expr_types = []
+        for expr in node.expressions:
+            type = self.visit(expr)
+            expr_types.append(type)
+
+        if not all(expr_type == arg_type for expr_type, arg_type in zip(expr_types, func_symbol.arg_symbols)):
+            raise Exception(f"Types in this call are all wrong. {expr_types} {func_symbol.arg_symbols}")
+
+        return func_symbol.return_type
+
+    def visit_ProgramNode(self, node):
+        for func in node.funcs:
+            self.visit(func)
