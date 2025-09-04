@@ -11,3 +11,6 @@ if something == 1 then
     return 1 # awoo!
 
 
+int something = 2
+if something + 2 == 4 then
+    return something

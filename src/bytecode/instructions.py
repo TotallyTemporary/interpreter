@@ -1,36 +1,33 @@
+from enum import Enum
+
 COUNTER = 0
 
-iota_cnt = 0
-def iota():
-    global iota_cnt
-    iota_cnt += 1
-    return iota_cnt
-
-(
-    NOOP,              
-    LOAD_CONST_INT,
-    LOAD_LOCAL_INT,
-    LOAD_FUNC,
-    STORE_LOCAL_INT,
-    POP,
-    DUP,
-    SWAP,
-    ADD,
-    SUB,
-    MUL,
-    DIV,
-    EQ,
-    NEQ,
-    LT,
-    LTE,
-    GT,
-    GTE,
-    JUMP,
-    JUMPZ,
-    JUMPNZ,
-    CALL,
-    RETURN,
-) = (iota() for _ in range(23))
+InstructionType = Enum("InstructionType", [
+    "NOOP",
+    "LOAD_CONST_INT",
+    "LOAD_LOCAL_INT", # 2
+    "LOAD_FUNC",      # 3
+    "STORE_LOCAL_INT",
+    "POP",
+    "DUP",
+    "SWAP",
+    "ADD",
+    "SUB",
+    "MUL",
+    "DIV",
+    "EQ", # 12
+    "NEQ",
+    "LT",
+    "LTE",
+    "GT",
+    "GTE",
+    "JUMP",
+    "JUMPZ", # 19
+    "JUMPNZ",
+    "CALL",
+    "RETURN", # 22
+    "ENTER"
+], start=0)
 
 class Instruction:
     def __init__(self, next = None):
@@ -45,6 +42,14 @@ class Instruction:
 class NoOp(Instruction):
     def __init__(self, next=None):
         super().__init__(next)
+
+class Label(Instruction):
+    def __init__(self, name: str, next=None):
+        super().__init__(next)
+        self.name = name
+
+    def __repr__(self):
+        return super().__repr__() + f"({self.name})"
 
 class LoadConstInt(Instruction):
     def __init__(self, value, next=None):

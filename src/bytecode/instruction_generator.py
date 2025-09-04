@@ -1,5 +1,6 @@
 from parser.symbol import Symbol
 from parser.ast_visitor import AstVisitor
+from parser.nodes import *
 from bytecode.instructions import *
 
 class Entrypoint:
@@ -12,7 +13,7 @@ class InstructionGenerator(AstVisitor):
     def __init__(self):
         self.entrypoints = []
 
-        self.start = self.head = NoOp()
+        self.start = self.head = Label("ProgramStart")
 
     def add_head(self, instruction):
         self.head.next = instruction
@@ -26,7 +27,8 @@ class InstructionGenerator(AstVisitor):
 
     def get_binop(self, op):
         match op:
-            case '+': return Add()
+            case "+":
+                return Add()
             case '-': return Sub()
             case '*': return Mul()
             case '/': return Div()
@@ -64,20 +66,22 @@ class InstructionGenerator(AstVisitor):
 
         self.add_head(jump := JumpIfZero())
         self.visit(node.body)
-        self.add_head(after := NoOp())
+        self.add_head(after := Label(f"AfterIf"))
 
         jump.cond_instr = after
 
     def visit_FuncDeclNode(self, node):
-        self.add_head(func_start := NoOp())
+        self.add_head(func_start := Label(f"FuncStart-{node.symbol.name}"))
         param_symbols = [param.symbol for param in node.params]
-        entrypoint = Entrypoint(node.symbol, func_start, param_symbols)
+        entrypoint = Entrypoint(
+            node.symbol, func_start, param_symbols,
+        )
         self.entrypoints.append(entrypoint)
 
         self.visit(node.body)
 
-    def visit_FuncCallNode(self, node):
-        self.add_head(LoadFunc(node.name))
+    def visit_FuncCallNode(self, node: FuncCallNode):
+        self.add_head(LoadFunc(node.symbol))
         for arg in node.expressions:
             self.visit(arg)
         self.add_head(CallFunc(arg_count=len(node.expressions)))

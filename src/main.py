@@ -1,4 +1,4 @@
-
+import sys
 from tokenizer.tokenizer import Tokenizer
 from tokenizer.tokens import *
 
@@ -7,13 +7,16 @@ from parser.ast_visitor import AstDebugVisitor
 from parser.symbol import TypeChecker
 
 from bytecode.instruction_generator import InstructionGenerator
-from bytecode.bytecode_generator import FunctionBytecodeGenerator
+from bytecode.bytecode_generator import FunctionBytecodeGenerator, ProgramBytecodeGenerator
 
+from interpreter.interpreter import Interpreter
+
+print("---Tokenizer:")
 tokenizer = Tokenizer(
-"""int fib(int n) is
+"""int fibonacci(int n) is
     if n == 0 then return 0
     if n == 1 then return 1
-    return fib(n - 2) + fib(n - 1)
+    return fibonacci(n - 2) + fibonacci(n - 1)
 """)
 
 tokens = tokenizer.tokens()
@@ -21,24 +24,30 @@ tokens = tokenizer.tokens()
 for token in tokens:
     print(token)
 
+print("---Parser:")
 parser = Parser(tokens)
 program = parser.program()
 AstDebugVisitor().visit(program)
 
-TypeChecker().visit(program)
+print("---Type checker:")
+type_checker = TypeChecker()
+type_checker.do_type_checking(program)
 
-generator = InstructionGenerator()
-generator.visit(program)
+print("---IR:")
+ir_generator = InstructionGenerator()
+ir_generator.visit(program)
 
-node = generator.start
+node = ir_generator.start
 
 while node != None:
     print(node)
     node = node.next
 
-entrypoint = generator.entrypoints[0]
-bytecode_generator = FunctionBytecodeGenerator(entrypoint)
-bytecode_generator.visit(entrypoint.body)
+print("---Bytecode:")
+bytecode_generator = ProgramBytecodeGenerator(ir_generator.entrypoints)
+bytecode = bytecode_generator.compile()
+print(bytecode)
 
-for bytecode in bytecode_generator.bytecode:
-    print(bytecode)
+print("---Interpreter:")
+interpreter = Interpreter(bytecode)
+interpreter.run()

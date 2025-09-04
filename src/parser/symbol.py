@@ -1,4 +1,5 @@
 from parser.ast_visitor import AstVisitor
+from parser.nodes import *
 
 class Symbol():
     def __init__(self, name: str, type: "Symbol" = None):
@@ -19,7 +20,8 @@ class TypeSymbol(Symbol):
         super().__init__(name, None)
 
 class SymbolTable():
-    def __init__(self):
+    def __init__(self, name: str):
+        self.name = name
         self.symbols = {}
 
     def define(self, symbol: Symbol):
@@ -35,9 +37,15 @@ class SymbolTable():
         return value
     
 class ScopedSymbolTable(SymbolTable):
-    def __init__(self, parent: "ScopedSymbolTable" = None):
-        super().__init__()
+    def __init__(self, name: str, parent: "ScopedSymbolTable" = None):
+        super().__init__(name)
         self.parent = parent
+        self.children = []
+        if self.parent is not None:
+            self.parent.add_child(self)
+
+    def add_child(self, child: "ScopedSymbolTable"):
+        self.children.append(child)
 
     def define(self, symbol: Symbol):
         super().define(symbol)
@@ -58,16 +66,20 @@ VOID_TYPE = TypeSymbol("__void")
 
 class TypeChecker(AstVisitor):
     def __init__(self):
-        self.global_scope = ScopedSymbolTable()
+        self.global_scope = ScopedSymbolTable("global")
         self.global_scope.define(INT_TYPE)
         self.global_scope.define(BOOL_TYPE)
         self.global_scope.define(FUNC_TYPE)
         self.global_scope.define(VOID_TYPE)
 
-        # will be set for each function
+        # will be set for each function, a bit hacky, but it works
         self.local_scope = self.global_scope
         self.expected_return_value = VOID_TYPE
         self.any_return_hit = False
+        self.local_variables = []
+
+    def do_type_checking(self, root_node):
+        self.visit(root_node)
 
     def visit_IntLiteralNode(self, node):
         return self.global_scope.lookup("int")
@@ -152,14 +164,14 @@ class TypeChecker(AstVisitor):
         self.visit(node.body)
         return VOID_TYPE
 
-    def visit_FuncDeclNode(self, node):
+    def visit_FuncDeclNode(self, node: FuncDeclNode):
         return_type = self.local_scope.lookup(node.type)
         func_symbol = FuncSymbol(node.name, FUNC_TYPE, return_type)
         self.local_scope.define(func_symbol)
         node.symbol = func_symbol
 
         # Scoped inside
-        self.local_scope = ScopedSymbolTable(self.local_scope)
+        self.local_scope = ScopedSymbolTable(node.name, prev_scope := self.local_scope)
         self.expected_return_value = return_type
         self.any_return_hit = False
 
@@ -171,6 +183,12 @@ class TypeChecker(AstVisitor):
 
         if not self.any_return_hit and self.expected_return_value != VOID_TYPE:
             raise Exception("No return on function. What the hell man.")
+        
+        # Exit inside function scope
+        self.local_scope = prev_scope
+        self.expected_return_value = VOID_TYPE
+        self.any_return_hit = False
+
         return VOID_TYPE
 
     def visit_FuncCallNode(self, node):
