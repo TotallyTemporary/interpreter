@@ -7,9 +7,16 @@ from parser.ast_visitor import AstDebugVisitor
 from parser.symbol import TypeChecker
 
 from bytecode.instruction_generator import InstructionGenerator
-from bytecode.bytecode_generator import FunctionBytecodeGenerator, ProgramBytecodeGenerator
+from bytecode.bytecode_generator import ProgramBytecodeGenerator
 
 from interpreter.interpreter import Interpreter
+
+# setup logging
+import logging
+import sys
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+
+
 
 print("---Tokenizer:")
 tokenizer = Tokenizer(

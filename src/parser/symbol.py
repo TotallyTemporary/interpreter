@@ -1,5 +1,12 @@
+import logging
 from parser.ast_visitor import AstVisitor
 from parser.nodes import *
+
+log = logging.getLogger(__name__)
+
+class TypeCheckerException(Exception):
+    def __init__(self, reason):
+        super().__init__(f"Type checker error: {reason}")
 
 class Symbol():
     def __init__(self, name: str, type: "Symbol" = None):
@@ -25,15 +32,19 @@ class SymbolTable():
         self.symbols = {}
 
     def define(self, symbol: Symbol):
+        log.debug(f"Defining {symbol}")
+
         if symbol.name in self.symbols and self.symbols[symbol.name] is not symbol:
-            raise Exception("Double declaration of symbol.") # TODO better errors
+            raise TypeCheckerException(f"Double declaration of symbol {symbol.name}")
         self.symbols[symbol.name] = symbol
 
     def lookup(self, symbol_name: str, error_on_not_found=True) -> Symbol | None:
+        log.debug(f"Looking up {symbol_name}")
+
         value = self.symbols.get(symbol_name, None)
 
         if value is None and error_on_not_found:
-            raise Exception("Not found!") # TODO better errors
+            raise TypeCheckerException(f"Symbol not found {symbol_name}")
         return value
     
 class ScopedSymbolTable(SymbolTable):
@@ -56,7 +67,7 @@ class ScopedSymbolTable(SymbolTable):
             value = self.parent.lookup(symbol_name)
         
         if value is None and error_on_not_found:
-            raise Exception("Not found!")
+            raise TypeCheckerException(f"Symbol not found: {symbol_name}")
         return value
 
 INT_TYPE = TypeSymbol("int")
@@ -108,17 +119,17 @@ class TypeChecker(AstVisitor):
                 expected_operand_type = BOOL_TYPE
                 output_type = BOOL_TYPE
             case _:
-                raise Exception("What the hell are these binop types")
+                raise TypeCheckerException(f"Binary operator types are unexpected. {type_left=}, {type_right=}")
 
         if type_left != expected_operand_type or type_right != expected_operand_type:
-            raise Exception(f"Binop operands are wrong type {type_left=} {type_right=} {expected_operand_type=}")
+            raise TypeCheckerException(f"Binop operands are wrong type {type_left=} {type_right=} {expected_operand_type=}")
 
         return output_type
 
     def visit_ReturnNode(self, node):
         type_symbol = self.visit(node.expr)
         if not type_symbol == self.expected_return_value:
-            raise Exception("Returning something way different to what we expected.")
+            raise TypeCheckerException(f"Returning something way different to what we expected. {type_symbol=}, {self.expected_return_value=}")
         self.any_return_hit = True
         return VOID_TYPE
 
@@ -127,7 +138,7 @@ class TypeChecker(AstVisitor):
         expr_type_symbol = self.visit(node.assign_expr)
 
         if type_symbol != expr_type_symbol:
-            raise Exception("Declaration expr and type dont match")
+            raise TypeCheckerException(f"Declaration expression and variable type don't match: {type_symbol=}, {expr_type_symbol=}")
         
         var_symbol = Symbol(node.name, type_symbol)
         self.local_scope.define(var_symbol)
@@ -140,7 +151,7 @@ class TypeChecker(AstVisitor):
         expr_type_symbol = self.visit(node.assign_expr)
 
         if var_symbol.type != expr_type_symbol:
-            raise Exception("Assignment doesnt match")
+            raise TypeCheckerException(f"Assignment expression and variable type don't match: {var_symbol=}, {expr_type_symbol=}")
         
         return var_symbol.type
 
@@ -160,7 +171,7 @@ class TypeChecker(AstVisitor):
     def visit_IfNode(self, node):
         cond_type = self.visit(node.condition)
         if cond_type != BOOL_TYPE:
-            raise Exception("If condition must be a boolean")
+            raise TypeCheckerException(f"If condition must be a boolean. Was: {cond_type}")
         self.visit(node.body)
         return VOID_TYPE
 
@@ -182,7 +193,7 @@ class TypeChecker(AstVisitor):
         self.visit(node.body)
 
         if not self.any_return_hit and self.expected_return_value != VOID_TYPE:
-            raise Exception("No return on function. What the hell man.")
+            raise TypeCheckerException(f"This function doesn't return but return type was expected.")
         
         # Exit inside function scope
         self.local_scope = prev_scope
@@ -195,8 +206,11 @@ class TypeChecker(AstVisitor):
         func_symbol = self.local_scope.lookup(node.name)
         node.symbol = func_symbol
 
-        if len(node.expressions) != len(func_symbol.arg_symbols):
-            raise Exception("Wrong number of arguments.")
+        passed_arguments_count = len(node.expressions)
+        expected_arguments = len(func_symbol.arg_symbols)
+
+        if passed_arguments_count != expected_arguments:
+            raise TypeCheckerException(f"Wrong number of arguments. {passed_arguments_count=} {expected_arguments=}")
 
         expr_types = []
         for expr in node.expressions:
@@ -204,7 +218,7 @@ class TypeChecker(AstVisitor):
             expr_types.append(type)
 
         if not all(expr_type == arg_type for expr_type, arg_type in zip(expr_types, func_symbol.arg_symbols)):
-            raise Exception(f"Types in this call are all wrong. {expr_types} {func_symbol.arg_symbols}")
+            raise TypeCheckerException(f"Types in this call are not as expected. {expr_types} {func_symbol.arg_symbols}")
 
         return func_symbol.return_type
 
