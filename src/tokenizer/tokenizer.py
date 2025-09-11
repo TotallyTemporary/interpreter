@@ -90,7 +90,7 @@ class Tokenizer:
         # check for keywords
         keyword_tokens = [Subclass(self.file) for Subclass in KeywordToken.__subclasses__()]
         for keyword_token in keyword_tokens:
-            if keyword_token.symbol_string == symbol_str:
+            if keyword_token.chars == symbol_str:
                 return keyword_token
     
         return NonKwSymbolToken(self.file, symbol_str)

@@ -79,17 +79,17 @@ class IntLiteralToken(ValueToken):
 
 # -- symbols
 class SymbolToken(Token):
-    def __init__(self, file, symbol_string: str):
+    def __init__(self, file, chars: str):
         super().__init__(file)
-        self.symbol_string = symbol_string
+        self.chars = chars
 
 class NonKwSymbolToken(SymbolToken):
-    def __init__(self, file, symbol_string: str):
-        super().__init__(file, symbol_string)
+    def __init__(self, file, chars: str):
+        super().__init__(file, chars)
 
 class KeywordToken(SymbolToken):
-    def __init__(self, file, symbol_string: str):
-        super().__init__(file, symbol_string)
+    def __init__(self, file, chars: str):
+        super().__init__(file, chars)
 
 class IfToken(KeywordToken):
     def __init__(self, file):

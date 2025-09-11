@@ -49,8 +49,8 @@ class Parser:
         body = self.block_statement()
 
         return FuncDeclNode(
-            type_token.symbol_string,
-            name_token.symbol_string,
+            type_token.chars,
+            name_token.chars,
             params,
             body,
         )
@@ -61,7 +61,7 @@ class Parser:
             type_token = self._expect(NonKwSymbolToken)
             name_token = self._expect(NonKwSymbolToken)
             param = ParamNode(
-                type_token.symbol_string, name_token.symbol_string
+                type_token.chars, name_token.chars
             )
             return param
 
@@ -114,15 +114,15 @@ class Parser:
 
     # assign_statement: SYMBOL EQUALS expr
     def assign_statement(self) -> AssignmentNode:
-        name = self._expect(NonKwSymbolToken).symbol_string
+        name = self._expect(NonKwSymbolToken).chars
         self._expect(AssignToken)
         expr = self.expr()
         return AssignmentNode(name, expr)
 
     # decl_statement: SYMBOL SYMBOL EQUALS expr
     def decl_statement(self) -> DeclarationNode:
-        type = self._expect(NonKwSymbolToken).symbol_string
-        name = self._expect(NonKwSymbolToken).symbol_string
+        type = self._expect(NonKwSymbolToken).chars
+        name = self._expect(NonKwSymbolToken).chars
         self._expect(AssignToken)
         expr = self.expr()
         return DeclarationNode(type, name, expr)
@@ -273,7 +273,7 @@ class Parser:
     # TODO attributes
     # var_atom: SYMBOL ((LPAREN arg_list RPAREN))*
     def var_atom(self):
-        name = self._expect(NonKwSymbolToken).symbol_string
+        name = self._expect(NonKwSymbolToken).chars
         left = VariableNode(name)
 
         possible_tokens = [LParenToken]
