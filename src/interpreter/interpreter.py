@@ -1,12 +1,5 @@
 from bytecode.instructions import *
 
-# TODO: duplicated code
-def to_bytes(value: int, bytes=4, signed=False):
-    """
-    Convert a value into bytes, like a 32-bit int to 4 bytes, etc.
-    """
-    return [byte for byte in value.to_bytes(bytes, byteorder='big', signed=signed)]
-
 def get_u32(data: list[int], pointer: int, signed=False) -> int:
     return int.from_bytes(data[pointer:pointer+4], signed=signed)
 
