@@ -5,8 +5,8 @@ COUNTER = 0
 InstructionType = Enum("InstructionType", [
     "NOOP",
     "LOAD_CONST_INT",
-    "LOAD_LOCAL_INT", # 2
-    "LOAD_FUNC",      # 3
+    "LOAD_LOCAL_INT",
+    "LOAD_FUNC",
     "STORE_LOCAL_INT",
     "POP",
     "DUP",
@@ -15,17 +15,19 @@ InstructionType = Enum("InstructionType", [
     "SUB",
     "MUL",
     "DIV",
-    "EQ", # 12
+    "EQ",
     "NEQ",
     "LT",
     "LTE",
     "GT",
     "GTE",
+    "OR",
+    "AND",
     "JUMP",
-    "JUMPZ", # 19
+    "JUMPZ",
     "JUMPNZ",
     "CALL",
-    "RETURN", # 22
+    "RETURN",
     "ENTER"
 ], start=0)
 
@@ -132,6 +134,14 @@ class GreaterThan(Instruction):
         super().__init__(next)
 
 class GreaterThanEquals(Instruction):
+    def __init__(self, next=None):
+        super().__init__(next)
+
+class Or(Instruction):
+    def __init__(self, next=None):
+        super().__init__(next)
+
+class And(Instruction):
     def __init__(self, next=None):
         super().__init__(next)
 

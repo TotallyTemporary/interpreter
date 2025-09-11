@@ -115,6 +115,16 @@ class Interpreter:
                 left = cf.value_stack.pop()
                 result = 1 if left >= right else 0
                 cf.value_stack.append(result)
+            elif instr == InstructionType.AND.value:
+                right = cf.value_stack.pop()
+                left = cf.value_stack.pop()
+                result = 1 if left and right else 0
+                cf.value_stack.append(result)
+            elif instr == InstructionType.OR.value:
+                right = cf.value_stack.pop()
+                left = cf.value_stack.pop()
+                result = 1 if left or right else 0
+                cf.value_stack.append(result)
             elif instr == InstructionType.JUMP.value:
                 dst = get_u16(self.bytecode, cf.ip, signed=True); cf.ip += 2
                 cf.ip += dst
@@ -163,6 +173,8 @@ class Interpreter:
                 
                 caller_frame = self.call_stack[-1]
                 caller_frame.value_stack.append(return_value)
+            else:
+                raise Exception(f"Some instruction we don't recognize. {instr}")
 
     def _find_function_metadata(self, bytecode) -> dict[int, FunctionMetadata]:
         funcs = {}

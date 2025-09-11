@@ -120,7 +120,7 @@ class TypeChecker(AstVisitor):
                 expected_operand_types = [INT_TYPE, BOOL_TYPE]
                 output_type = BOOL_TYPE
             case 'and' | 'or':
-                expected_operand_types = BOOL_TYPE
+                expected_operand_types = [BOOL_TYPE]
                 output_type = BOOL_TYPE
             case _:
                 raise TypeCheckerException(f"Binary operator types are unexpected. {type_left=}, {type_right=}")

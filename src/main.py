@@ -20,12 +20,10 @@ logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 print("---Tokenizer:")
 tokenizer = Tokenizer(
-"""int fibonacci(int n) is
-    int x = 0
-    do 
-        x = x + 1
-    while x < 10 == true
-    return x
+"""int fib(int n) is
+    if n == 0 then return 0
+    if n == 1 then return 1
+    return fib(n - 1) + fib(n - 2)
 """)
 
 tokens = tokenizer.tokens()

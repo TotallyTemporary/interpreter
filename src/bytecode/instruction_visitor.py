@@ -81,6 +81,12 @@ class DefaultInstructionVisitor(InstructionVisitor):
     def visit_GreaterThanEquals(self, instruction):
         self.visit_if_exists(instruction.next)
 
+    def visit_Or(self, instruction):
+        self.visit_if_exists(instruction.next)
+
+    def visit_And(self, instruction):
+        self.visit_if_exists(instruction.next)
+
     def visit_Jump(self, instruction):
         # self.visit_if_exists(instruction.instruction)
         self.visit_if_exists(instruction.next)

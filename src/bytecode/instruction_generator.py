@@ -42,6 +42,8 @@ class InstructionGenerator(AstVisitor):
             case '>=': return GreaterThanEquals()
             case '==': return Equals()
             case '!=': return NotEquals()
+            case 'or': return Or()
+            case 'and': return And()
 
     def visit_BinOpNode(self, node):
         self.visit(node.left)

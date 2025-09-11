@@ -210,6 +210,14 @@ class FunctionBytecodeGenerator(InstructionVisitor):
         self.bytecode.extend(to_bytes(InstructionType.GTE.value, 1))
         self.visit_if_exists(instruction.next)
 
+    def visit_Or(self, instruction):
+        self.bytecode.extend(to_bytes(InstructionType.OR.value, 1))
+        self.visit_if_exists(instruction.next)
+
+    def visit_And(self, instruction):
+        self.bytecode.extend(to_bytes(InstructionType.AND.value, 1))
+        self.visit_if_exists(instruction.next)
+
     def visit_Jump(self, instruction):
         self.bytecode.extend(to_bytes(InstructionType.JUMP.value, 1))
 
