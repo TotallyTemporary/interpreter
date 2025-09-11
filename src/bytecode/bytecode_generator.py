@@ -82,8 +82,9 @@ class FunctionBytecodeGenerator(InstructionVisitor):
         """
         for placeholder_byte_index, instr in self.jump_placeholders.items():
             instr_byte_index = self.instruction_to_byte_index_dict[instr]
-            byte_diff = instr_byte_index - placeholder_byte_index
-            self.bytecode[placeholder_byte_index:placeholder_byte_index+2] = to_bytes(byte_diff, 2, signed=True)
+            jump_arg_to_instr_diff = instr_byte_index - placeholder_byte_index
+            jump_to_instr_diff = jump_arg_to_instr_diff - 2 # we want to increment from the jump instruction, not from the jump argument, of course.
+            self.bytecode[placeholder_byte_index:placeholder_byte_index+2] = to_bytes(jump_to_instr_diff, 2, signed=True)
 
     def _find_locals_and_args(self):
         arg_symbols = self.entrypoint.params

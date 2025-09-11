@@ -106,12 +106,12 @@ class Interpreter:
                 dst = get_u16(self.bytecode, cf.ip, signed=True); cf.ip += 2
                 value = cf.value_stack.pop()
                 if value == 0:
-                    cf.ip += dst - 2 # jumps are weird, it doesn't take argument into account
+                    cf.ip += dst
             elif instr == InstructionType.JUMPNZ.value:
                 dst = get_u16(self.bytecode, cf.ip, signed=True); cf.ip += 2
                 value = cf.value_stack.pop()
                 if value != 0:
-                    cf.ip += dst - 2 # jumps are weird, it doesn't take argument into account
+                    cf.ip += dst
             elif instr == InstructionType.ENTER.value:
                 # we are a new function, handle args and locals
                 _ = get_u16(self.bytecode, cf.ip); cf.ip += 2
