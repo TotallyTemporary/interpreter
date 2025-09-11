@@ -21,9 +21,8 @@ logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 print("---Tokenizer:")
 tokenizer = Tokenizer(
 """int fibonacci(int n) is
-    if n == 0 then return 0
-    if n == 1 then return 1
-    return fibonacci(n - 2) + fibonacci(n - 1)
+    n = 3
+    return n
 """)
 
 tokens = tokenizer.tokens()

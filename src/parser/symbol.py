@@ -1,5 +1,5 @@
 import logging
-from parser.ast_visitor import AstVisitor
+from parser.ast_visitor import AstVisitor, DefaultAstVisitor
 from parser.nodes import *
 
 log = logging.getLogger(__name__)
@@ -90,7 +90,9 @@ class TypeChecker(AstVisitor):
         self.local_variables = []
 
     def do_type_checking(self, root_node):
-        self.visit(root_node)
+        self.visit(root_node) # does type checking, adds metadata to funcs, variables etc.
+        CheckCodeAfterReturn().visit(root_node) # makes sure returns are always last in block
+        CheckFuncsAlwaysReturn().visit(root_node) # makes sure all funcs return in all branches
 
     def visit_IntLiteralNode(self, node):
         return self.global_scope.lookup("int")
@@ -152,7 +154,8 @@ class TypeChecker(AstVisitor):
 
         if var_symbol.type != expr_type_symbol:
             raise TypeCheckerException(f"Assignment expression and variable type don't match: {var_symbol=}, {expr_type_symbol=}")
-        
+
+        node.symbol = var_symbol
         return var_symbol.type
 
     def visit_BlockStatement(self, node):
@@ -225,3 +228,41 @@ class TypeChecker(AstVisitor):
     def visit_ProgramNode(self, node):
         for func in node.funcs:
             self.visit(func)
+
+class CheckFuncsAlwaysReturn(DefaultAstVisitor):
+    def visit_ReturnNode(self, node):
+        return True
+
+    def visit_BlockStatement(self, node):
+        if len(node.statements) == 0:
+            return
+        
+        last = node.statements[-1]
+        return self.visit(last)
+
+    def visit_IfNode(self, node: IfNode):
+        self.visit(node.condition)
+        self.visit(node.body)
+        return False # doesn't matter if we return since it might not happen. # TODO else
+
+    def visit_FuncDeclNode(self, node):
+        return self.visit(node.body)
+
+    def visit_ProgramNode(self, node: ProgramNode):
+        for func in node.funcs:
+            always_returns = self.visit(func)
+            return_type = func.symbol.return_type
+            if not always_returns and return_type != VOID_TYPE:
+                raise TypeCheckerException(f"Function '{func.name}' doesn't return in all cases.")
+            
+class CheckCodeAfterReturn(DefaultAstVisitor):
+    def visit_BlockStatement(self, node):
+        for statement in node.statements:
+            self.visit(statement)
+
+        if len(node.statements) == 0:
+            return
+        
+        for statement in node.statements[:-1]:
+            if isinstance(statement, ReturnNode):
+                raise TypeCheckerException(f"Unreachable code, return must be last instruction in a block.")

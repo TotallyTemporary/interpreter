@@ -16,6 +16,11 @@ class ParserFile:
         if self.index >= len(self.tokens):
             raise UnexpectedEofException(self.tokens[-1])
         return self.tokens[self.index]
+    
+    def next_token(self):
+        if self.index + 1 >= len(self.tokens):
+            raise UnexpectedEofException(self.tokens[-1])
+        return self.tokens[self.index+1]
 
     def advance(self):
         self.index += 1
@@ -88,15 +93,35 @@ class Parser:
         self._expect(DeIndentToken)
         return BlockStatement(statements)
 
-    # statement: expr | if_statement | return_statement
+    # statement: expr | if_statement | return_statement | assign_statement | decl_statement
     def statement(self) -> StatementNode:
         current_token = self.file.current_token()
+        next_token = self.file.next_token()
         if isinstance(current_token, ReturnToken):
             return self.return_statement()
         elif isinstance(current_token, IfToken):
             return self.if_statement()
+        elif isinstance(current_token, NonKwSymbolToken) and isinstance(next_token, NonKwSymbolToken):
+            return self.decl_statement()
+        elif isinstance(current_token, NonKwSymbolToken) and isinstance(next_token, AssignToken):
+            return self.assign_statement()
         else:
             raise UnexpectedTokenException(current_token, [ReturnToken, IfToken])
+
+    # assign_statement: SYMBOL EQUALS expr
+    def assign_statement(self) -> AssignmentNode:
+        name = self._expect(NonKwSymbolToken).symbol_string
+        self._expect(AssignToken)
+        expr = self.expr()
+        return AssignmentNode(name, expr)
+
+    # decl_statement: SYMBOL SYMBOL EQUALS expr
+    def decl_statement(self) -> DeclarationNode:
+        type = self._expect(NonKwSymbolToken).symbol_string
+        name = self._expect(NonKwSymbolToken).symbol_string
+        self._expect(AssignToken)
+        expr = self.expr()
+        return DeclarationNode(type, name, expr)
 
     def if_statement(self) -> IfNode:
         self._expect(IfToken)

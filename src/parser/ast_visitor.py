@@ -89,3 +89,48 @@ class AstDebugVisitor(AstVisitor):
         with self.indented():
             for func in node.funcs:
                 self.visit(func)
+
+
+class DefaultAstVisitor(AstVisitor):
+    def visit_IntLiteralNode(self, node):
+        pass
+
+    def visit_VariableNode(self, node):
+        pass
+
+    def visit_BinOpNode(self, node):
+        self.visit(node.left)
+        self.visit(node.right)
+
+    def visit_ReturnNode(self, node):
+        self.visit(node.expr)
+
+    def visit_DeclarationNode(self, node):
+        self.visit(node.assign_expr)
+
+    def visit_AssignmentNode(self, node):
+        self.visit(node.assign_expr)
+
+    def visit_BlockStatement(self, node):
+        for child in node.statements:
+            self.visit(child)
+
+    def visit_ParamNode(self, node):
+        pass
+
+    def visit_IfNode(self, node):
+        self.visit(node.condition)
+        self.visit(node.body)
+
+    def visit_FuncDeclNode(self, node):
+        for param in node.params:
+            self.visit(param)
+        self.visit(node.body)
+
+    def visit_FuncCallNode(self, node):
+        for expr in node.expressions:
+            self.visit(expr)
+
+    def visit_ProgramNode(self, node):
+        for func in node.funcs:
+            self.visit(func)
