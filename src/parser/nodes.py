@@ -7,6 +7,10 @@ class ExpressionNode(AstNode):
 class StatementNode(AstNode):
     pass
 
+class BoolLiteralNode(ExpressionNode):
+    def __init__(self, value: bool):
+        self.value = value
+
 class IntLiteralNode(ExpressionNode):
     def __init__(self, value: int):
         self.value = value
@@ -41,6 +45,16 @@ class BlockStatement(StatementNode):
         self.statements = statements
 
 class IfNode(StatementNode):
+    def __init__(self, condition: ExpressionNode, body: BlockStatement):
+        self.condition = condition
+        self.body = body
+
+class WhileNode(StatementNode):
+    def __init__(self, condition: ExpressionNode, body: BlockStatement):
+        self.condition = condition
+        self.body = body
+
+class DoWhileNode(StatementNode):
     def __init__(self, condition: ExpressionNode, body: BlockStatement):
         self.condition = condition
         self.body = body

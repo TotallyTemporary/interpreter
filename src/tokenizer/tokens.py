@@ -95,9 +95,17 @@ class IfToken(KeywordToken):
     def __init__(self, file):
         super().__init__(file, "if")
 
+class WhileToken(KeywordToken):
+    def __init__(self, file):
+        super().__init__(file, "while")
+
 class IsToken(KeywordToken):
     def __init__(self, file):
         super().__init__(file, "is")
+
+class DoToken(KeywordToken):
+    def __init__(self, file):
+        super().__init__(file, "do")
 
 class OrToken(KeywordToken):
     def __init__(self, file):
@@ -118,6 +126,14 @@ class AndToken(KeywordToken):
 class NotToken(KeywordToken):
     def __init__(self, file):
         super().__init__(file, "not")
+
+class TrueToken(KeywordToken):
+    def __init__(self, file):
+        super().__init__(file, "true")
+
+class FalseToken(KeywordToken):
+    def __init__(self, file):
+        super().__init__(file, "false")
 
 # --
 

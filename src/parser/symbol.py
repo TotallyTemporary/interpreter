@@ -94,6 +94,9 @@ class TypeChecker(AstVisitor):
         CheckCodeAfterReturn().visit(root_node) # makes sure returns are always last in block
         CheckFuncsAlwaysReturn().visit(root_node) # makes sure all funcs return in all branches
 
+    def visit_BoolLiteralNode(self, node):
+        return self.global_scope.lookup("bool")
+
     def visit_IntLiteralNode(self, node):
         return self.global_scope.lookup("int")
 
@@ -107,25 +110,24 @@ class TypeChecker(AstVisitor):
         type_right = self.visit(node.right)
         op = node.op
 
-        expected_operand_type: TypeSymbol
+        expected_operand_types: list[TypeSymbol]
         output_type: TypeSymbol
         match op:
             case '+' | '-' | '*' | '/' | '%':
-                expected_operand_type = INT_TYPE
+                expected_operand_types = [INT_TYPE]
                 output_type = INT_TYPE
             case '<' | '<=' | '>' | '>=' | '==' | '!=':
-                # TODO can't compare booleans :P
-                expected_operand_type = INT_TYPE
+                expected_operand_types = [INT_TYPE, BOOL_TYPE]
                 output_type = BOOL_TYPE
             case 'and' | 'or':
-                expected_operand_type = BOOL_TYPE
+                expected_operand_types = BOOL_TYPE
                 output_type = BOOL_TYPE
             case _:
                 raise TypeCheckerException(f"Binary operator types are unexpected. {type_left=}, {type_right=}")
 
-        if type_left != expected_operand_type or type_right != expected_operand_type:
-            raise TypeCheckerException(f"Binop operands are wrong type {type_left=} {type_right=} {expected_operand_type=}")
-
+        if type_left not in expected_operand_types or type_right not in expected_operand_types:
+            raise TypeCheckerException(f"Binop operands are wrong type {type_left=} {type_right=} {expected_operand_types=}")
+        
         return output_type
 
     def visit_ReturnNode(self, node):
@@ -175,6 +177,20 @@ class TypeChecker(AstVisitor):
         cond_type = self.visit(node.condition)
         if cond_type != BOOL_TYPE:
             raise TypeCheckerException(f"If condition must be a boolean. Was: {cond_type}")
+        self.visit(node.body)
+        return VOID_TYPE
+    
+    def visit_WhileNode(self, node):
+        cond_type = self.visit(node.condition)
+        if cond_type != BOOL_TYPE:
+            raise TypeCheckerException(f"While condition must be a boolean. Was: {cond_type}")
+        self.visit(node.body)
+        return VOID_TYPE
+
+    def visit_DoWhileNode(self, node):
+        cond_type = self.visit(node.condition)
+        if cond_type != BOOL_TYPE:
+            raise TypeCheckerException(f"Do-While condition must be a boolean. Was: {cond_type}")
         self.visit(node.body)
         return VOID_TYPE
 
@@ -240,10 +256,20 @@ class CheckFuncsAlwaysReturn(DefaultAstVisitor):
         last = node.statements[-1]
         return self.visit(last)
 
+    def visit_DoWhileNode(self, node: IfNode):
+        self.visit(node.condition)
+        body_returns = self.visit(node.body)
+        return body_returns # body is run at least once with do-while.
+
+    def visit_WhileNode(self, node: WhileNode):
+        self.visit(node.condition)
+        self.visit(node.body)
+        return False
+
     def visit_IfNode(self, node: IfNode):
         self.visit(node.condition)
         self.visit(node.body)
-        return False # doesn't matter if we return since it might not happen. # TODO else
+        return False # TODO else
 
     def visit_FuncDeclNode(self, node):
         return self.visit(node.body)

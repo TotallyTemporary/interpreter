@@ -82,7 +82,7 @@ class DefaultInstructionVisitor(InstructionVisitor):
         self.visit_if_exists(instruction.next)
 
     def visit_Jump(self, instruction):
-        self.visit_if_exists(instruction.instruction)
+        # self.visit_if_exists(instruction.instruction)
         self.visit_if_exists(instruction.next)
 
     def visit_JumpIfZero(self, instruction):

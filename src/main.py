@@ -21,8 +21,11 @@ logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 print("---Tokenizer:")
 tokenizer = Tokenizer(
 """int fibonacci(int n) is
-    n = 3
-    return n
+    int x = 0
+    do 
+        x = x + 1
+    while x < 10 == true
+    return x
 """)
 
 tokens = tokenizer.tokens()
@@ -43,11 +46,11 @@ print("---IR:")
 ir_generator = InstructionGenerator()
 ir_generator.visit(program)
 
-node = ir_generator.start
+instruction = ir_generator.start
 
-while node != None:
-    print(node)
-    node = node.next
+while instruction != None:
+    print(instruction)
+    instruction = instruction.next
 
 print("---Bytecode:")
 bytecode_generator = ProgramBytecodeGenerator(ir_generator.entrypoints)

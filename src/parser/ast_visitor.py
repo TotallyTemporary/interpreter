@@ -30,6 +30,9 @@ class AstDebugVisitor(AstVisitor):
         yield
         self.indent -= 2
 
+    def visit_BoolLiteralNode(self, node):
+        self.indent_print(f"Bool({node.value})")
+
     def visit_IntLiteralNode(self, node):
         self.indent_print(f"Integer({node.value})")
 
@@ -72,6 +75,18 @@ class AstDebugVisitor(AstVisitor):
             self.visit(node.condition)
             self.visit(node.body)
 
+    def visit_WhileNode(self, node):
+        self.indent_print(f"While")
+        with self.indented():
+            self.visit(node.condition)
+            self.visit(node.body)
+
+    def visit_DoWhileNode(self, node):
+        self.indent_print(f"DoWhile")
+        with self.indented():
+            self.visit(node.condition)
+            self.visit(node.body)
+
     def visit_FuncDeclNode(self, node):
         self.indent_print(f"Func({node.type},{node.name})")
         with self.indented():
@@ -92,6 +107,9 @@ class AstDebugVisitor(AstVisitor):
 
 
 class DefaultAstVisitor(AstVisitor):
+    def visit_BoolLiteralNode(self, node):
+        pass
+
     def visit_IntLiteralNode(self, node):
         pass
 
@@ -119,6 +137,14 @@ class DefaultAstVisitor(AstVisitor):
         pass
 
     def visit_IfNode(self, node):
+        self.visit(node.condition)
+        self.visit(node.body)
+
+    def visit_WhileNode(self, node):
+        self.visit(node.condition)
+        self.visit(node.body)
+
+    def visit_DoWhileNode(self, node):
         self.visit(node.condition)
         self.visit(node.body)
 

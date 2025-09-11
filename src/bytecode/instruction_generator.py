@@ -19,6 +19,10 @@ class InstructionGenerator(AstVisitor):
         self.head.next = instruction
         self.head = instruction
 
+    def visit_BoolLiteralNode(self, node):
+        value = 0 if node.value is False else 1
+        self.add_head(LoadConstInt(value))
+
     def visit_IntLiteralNode(self, node):
         self.add_head(LoadConstInt(node.value))
 
@@ -69,6 +73,48 @@ class InstructionGenerator(AstVisitor):
         self.add_head(after := Label(f"AfterIf"))
 
         jump.cond_instr = after
+
+    def visit_WhileNode(self, node: WhileNode):
+        """A while-loop.
+        
+        BeforeWhile:
+            x + 2 == 0
+            JumpIfZero AfterWhile
+            print "Inside loop"
+            Jump BeforeWhile
+        AfterWhile:
+        """
+        self.add_head(before := Label(f"BeforeWhile"))
+        self.visit(node.condition)
+
+        self.add_head(jump_over := JumpIfZero())
+        self.visit(node.body)
+        self.add_head(jump_back := Jump())
+        self.add_head(after := Label(f"AfterWhile"))
+
+        jump_back.instruction = before
+        jump_over.cond_instr = after
+
+    def visit_DoWhileNode(self, node: WhileNode):
+        """A do-while-loop.
+        
+        BeforeWhile:
+            print "Inside loop"
+            x + 2 == 0
+            JumpIfZero AfterWhile
+            Jump BeforeWhile
+        AfterWhile:
+        """
+        self.add_head(before := Label(f"BeforeWhile"))
+        self.visit(node.body)
+        self.visit(node.condition)
+
+        self.add_head(jump_over := JumpIfZero())
+        self.add_head(jump_back := Jump())
+        self.add_head(after := Label(f"AfterWhile"))
+
+        jump_back.instruction = before
+        jump_over.cond_instr = after
 
     def visit_FuncDeclNode(self, node):
         self.add_head(func_start := Label(f"FuncStart-{node.symbol.name}"))

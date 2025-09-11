@@ -91,17 +91,33 @@ class Interpreter:
                 result = 1 if left == right else 0
                 cf.value_stack.append(result)
             elif instr == InstructionType.NEQ.value:
-                raise Exception("Not yet implemented")
+                right = cf.value_stack.pop()
+                left = cf.value_stack.pop()
+                result = 1 if left != right else 0
+                cf.value_stack.append(result)
             elif instr == InstructionType.LT.value:
-                raise Exception("Not yet implemented")
+                right = cf.value_stack.pop()
+                left = cf.value_stack.pop()
+                result = 1 if left < right else 0
+                cf.value_stack.append(result)
             elif instr == InstructionType.LTE.value:
-                raise Exception("Not yet implemented")
+                right = cf.value_stack.pop()
+                left = cf.value_stack.pop()
+                result = 1 if left <= right else 0
+                cf.value_stack.append(result)
             elif instr == InstructionType.GT.value:
-                raise Exception("Not yet implemented")
+                right = cf.value_stack.pop()
+                left = cf.value_stack.pop()
+                result = 1 if left > right else 0
+                cf.value_stack.append(result)
             elif instr == InstructionType.GTE.value:
-                raise Exception("Not yet implemented")
+                right = cf.value_stack.pop()
+                left = cf.value_stack.pop()
+                result = 1 if left >= right else 0
+                cf.value_stack.append(result)
             elif instr == InstructionType.JUMP.value:
-                raise Exception("Not yet implemented")
+                dst = get_u16(self.bytecode, cf.ip, signed=True); cf.ip += 2
+                cf.ip += dst
             elif instr == InstructionType.JUMPZ.value:
                 dst = get_u16(self.bytecode, cf.ip, signed=True); cf.ip += 2
                 value = cf.value_stack.pop()

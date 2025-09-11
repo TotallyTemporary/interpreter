@@ -37,7 +37,7 @@ class Instruction:
         COUNTER += 1
 
     def __repr__(self):
-        return f"{self.counter}: {self.__class__.__name__}"
+        return f"{self.counter} (->{self.next.counter if self.next is not None else None}): {self.__class__.__name__}"
 
 class NoOp(Instruction):
     def __init__(self, next=None):

@@ -93,7 +93,7 @@ class Parser:
         self._expect(DeIndentToken)
         return BlockStatement(statements)
 
-    # statement: expr | if_statement | return_statement | assign_statement | decl_statement
+    # statement: expr | if_statement | return_statement | while_statement | do_while_statement | assign_statement | decl_statement
     def statement(self) -> StatementNode:
         current_token = self.file.current_token()
         next_token = self.file.next_token()
@@ -101,6 +101,10 @@ class Parser:
             return self.return_statement()
         elif isinstance(current_token, IfToken):
             return self.if_statement()
+        elif isinstance(current_token, WhileToken):
+            return self.while_statement()
+        elif isinstance(current_token, DoToken):
+            return self.do_while_statement()
         elif isinstance(current_token, NonKwSymbolToken) and isinstance(next_token, NonKwSymbolToken):
             return self.decl_statement()
         elif isinstance(current_token, NonKwSymbolToken) and isinstance(next_token, AssignToken):
@@ -123,6 +127,23 @@ class Parser:
         expr = self.expr()
         return DeclarationNode(type, name, expr)
 
+    # while_statement: while expr do block_statement
+    def while_statement(self) -> WhileNode:
+        self._expect(WhileToken)
+        cond = self.expr()
+        self._expect(DoToken)
+        body = self.block_statement()
+        return WhileNode(cond, body)
+    
+    # do_while_statement: do block_statement while expr
+    def do_while_statement(self) -> DoWhileNode:
+        self._expect(DoToken)
+        body = self.block_statement()
+        self._expect(WhileToken)
+        cond = self.expr()
+        return DoWhileNode(cond, body)
+
+    # if_statement: if expr then block_statement
     def if_statement(self) -> IfNode:
         self._expect(IfToken)
         cond = self.expr()
@@ -217,7 +238,7 @@ class Parser:
         return self.atom()
 
     # TODO strings, floats
-    # atom: SYMBOL | INTEGER
+    # atom: SYMBOL | TRUE | FALSE | INTEGER
     def atom(self):
         current_token = self.file.current_token()
         match current_token:
@@ -226,6 +247,12 @@ class Parser:
                 return IntLiteralNode(token.value)
             case NonKwSymbolToken() as token:
                 return self.var_atom()
+            case TrueToken():
+                self._expect(TrueToken)
+                return BoolLiteralNode(True)
+            case FalseToken():
+                self._expect(FalseToken)
+                return BoolLiteralNode(False)
             case _: raise UnexpectedTokenException(current_token, [IntLiteralToken, NonKwSymbolToken])
 
     # arg_list: expr? (COMMA expr)*
