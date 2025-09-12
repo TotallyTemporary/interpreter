@@ -2,6 +2,7 @@ from parser.symbol import Symbol
 from parser.ast_visitor import AstVisitor
 from parser.nodes import *
 from bytecode.instructions import *
+from builtin.globals import NativeFuncs, VOID_TYPE
 
 class Entrypoint:
     def __init__(self, symbol: Symbol, body: Instruction, params: list[Symbol]):
@@ -129,11 +130,22 @@ class InstructionGenerator(AstVisitor):
 
         self.visit(node.body)
 
+        # void functions might not have return statements at all, but we still want to return something, even if it's just to pop it later.
+        if node.symbol.return_type == VOID_TYPE:
+            self.add_head(LoadConstInt(0))
+            self.add_head(Return())
+
     def visit_FuncCallNode(self, node: FuncCallNode):
-        self.add_head(LoadFunc(node.symbol))
+        is_native = NativeFuncs.is_native_func(node.symbol)
+
+        self.add_head(LoadGlobalInt(node.symbol))
         for arg in node.expressions:
             self.visit(arg)
-        self.add_head(CallFunc(arg_count=len(node.expressions)))
+
+        if not is_native:
+            self.add_head(CallFunc(arg_count=len(node.expressions)))
+        else:
+            self.add_head(CallNativeFunc(arg_count=len(node.expressions)))
 
     def visit_ProgramNode(self, node):
         for func in node.funcs:

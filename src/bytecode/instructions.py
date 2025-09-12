@@ -6,7 +6,7 @@ InstructionType = Enum("InstructionType", [
     "NOOP",
     "LOAD_CONST_INT",
     "LOAD_LOCAL_INT",
-    "LOAD_FUNC",
+    "LOAD_GLOBAL_INT",
     "STORE_LOCAL_INT",
     "POP",
     "DUP",
@@ -27,6 +27,7 @@ InstructionType = Enum("InstructionType", [
     "JUMPZ",
     "JUMPNZ",
     "CALL",
+    "CALL_NATIVE",
     "RETURN",
     "ENTER"
 ], start=0)
@@ -69,7 +70,7 @@ class LoadLocalInt(Instruction):
     def __repr__(self):
         return super().__repr__() + f"({self.var})"
 
-class LoadFunc(Instruction):
+class LoadGlobalInt(Instruction):
     def __init__(self, var, next=None):
         super().__init__(next)
         self.var = var
@@ -170,6 +171,11 @@ class JumpIfNotZero(Instruction):
         return super().__repr__() + f"[{self.cond_instr}]"
 
 class CallFunc(Instruction):
+    def __init__(self, next=None, arg_count: int = 0):
+        super().__init__(next)
+        self.arg_count = arg_count
+
+class CallNativeFunc(Instruction):
     def __init__(self, next=None, arg_count: int = 0):
         super().__init__(next)
         self.arg_count = arg_count

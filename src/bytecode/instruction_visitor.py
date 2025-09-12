@@ -36,7 +36,7 @@ class DefaultInstructionVisitor(InstructionVisitor):
     def visit_LoadLocalInt(self, instruction):
         self.visit_if_exists(instruction.next)
 
-    def visit_LoadFunc(self, instruction):
+    def visit_LoadGlobalInt(self, instruction):
         self.visit_if_exists(instruction.next)
 
     def visit_StoreLocalInt(self, instruction):
@@ -100,6 +100,9 @@ class DefaultInstructionVisitor(InstructionVisitor):
         self.visit_if_exists(instruction.next)
 
     def visit_CallFunc(self, instruction):
+        self.visit_if_exists(instruction.next)
+
+    def visit_CallNativeFunc(self, instruction):
         self.visit_if_exists(instruction.next)
 
     def visit_Return(self, instruction):

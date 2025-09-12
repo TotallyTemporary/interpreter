@@ -4,7 +4,7 @@ from tokenizer.tokens import *
 
 from parser.parser import Parser
 from parser.ast_visitor import AstDebugVisitor
-from parser.symbol import TypeChecker
+from parser.type_checker import TypeChecker
 
 from bytecode.instruction_generator import InstructionGenerator
 from bytecode.bytecode_generator import ProgramBytecodeGenerator
@@ -20,10 +20,15 @@ logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 print("---Tokenizer:")
 tokenizer = Tokenizer(
-"""int fib(int n) is
+"""
+int fib(int n) is
     if n == 0 then return 0
     if n == 1 then return 1
     return fib(n - 1) + fib(n - 2)
+
+void main() is
+    int result = fib(15)
+    print(result)
 """)
 
 tokens = tokenizer.tokens()
@@ -53,8 +58,9 @@ while instruction != None:
 print("---Bytecode:")
 bytecode_generator = ProgramBytecodeGenerator(ir_generator.entrypoints)
 bytecode = bytecode_generator.compile()
-print(bytecode)
+global_symbol_indices = bytecode_generator.get_global_symbol_indices()
+function_entrypoints = bytecode_generator.get_functions_entrypoint_mapping()
 
 print("---Interpreter:")
-interpreter = Interpreter(bytecode)
+interpreter = Interpreter(bytecode, global_symbol_indices, function_entrypoints)
 interpreter.run()

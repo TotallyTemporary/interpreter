@@ -1,4 +1,10 @@
+import logging
+
 from bytecode.instructions import *
+from parser.symbol import Symbol
+from builtin.globals import NativeFuncs, FUNC_TYPE
+
+log = logging.getLogger(__name__)
 
 def get_u32(data: list[int], pointer: int, signed=False) -> int:
     return int.from_bytes(data[pointer:pointer+4], signed=signed)
@@ -23,18 +29,55 @@ class Frame:
         self.value_stack = []
 
 class Interpreter:
-    def __init__(self, bytecode):
+    def __init__(self, bytecode, global_symbol_indices: dict[Symbol, int], function_entrypoints: dict[Symbol, int]):
         self.bytecode = bytecode
-        self.funcs = self._find_function_metadata(bytecode)
+        self.global_symbol_indices = global_symbol_indices
+        self.function_entrypoints = function_entrypoints
 
+        self._natives_dict = NativeFuncs.construct_native_funcs()
+
+        self.globals = [None]*len(global_symbol_indices)
+        self.natives = list(self._natives_dict.values())
         self.call_stack: list[Frame] = []
+        self._fill_globals()
+
+    def _find_main_function(self):
+        for func_symbol, global_index in self.global_symbol_indices.items():
+            if func_symbol.name == "main" and func_symbol.type == FUNC_TYPE:
+                return self.globals[global_index]
+        raise Exception("No main function!")
+
+    def _fill_globals(self):
+        """Introduce values for global variables."""
+        
+        # functions are globals. their entrypoint is stored.
+        for func_symbol, entrypoint in self.function_entrypoints.items():
+            index = self.global_symbol_indices.get(func_symbol)
+
+            # TODO, function that's never used will not have a spot in the globals array, check for this and remove entrypoint entirely
+            if index is None:
+                continue
+
+            self.globals[index] = entrypoint
+
+        # native functions are also globals, their index into the native array is stored.
+        for native_index, native_symbol in enumerate(self._natives_dict.keys()):
+            global_index = self.global_symbol_indices.get(native_symbol)
+
+            # TODO, function that's never used will not have a spot in the globals array, check for this and remove entrypoint entirely
+            if global_index is None:
+                continue
+
+            self.globals[global_index] = native_index
 
     def run(self):
-        args = [15]
+        args = []
         print(f"Args: {args}")
-        frame = Frame(0)
+
+        main_func_ip = self._find_main_function()
+        frame = Frame(main_func_ip)
         frame.value_stack.extend(reversed(args))
-        self.call_stack.append(frame) # TODO find main function!
+        self.call_stack.append(frame)
 
         while True:
             cf = self.call_stack[-1]
@@ -52,10 +95,10 @@ class Interpreter:
                 local_index = get_u16(self.bytecode, cf.ip); cf.ip += 2
                 const_value = cf.locals[local_index]
                 cf.value_stack.append(const_value)
-            elif instr == InstructionType.LOAD_FUNC.value:
-                func_index = get_u16(self.bytecode, cf.ip); cf.ip += 2
-                func_entrypoint = self.funcs[func_index].entrypoint
-                cf.value_stack.append(func_entrypoint)
+            elif instr == InstructionType.LOAD_GLOBAL_INT.value:
+                global_index = get_u16(self.bytecode, cf.ip); cf.ip += 2
+                global_value = self.globals[global_index]
+                cf.value_stack.append(global_value)
             elif instr == InstructionType.STORE_LOCAL_INT.value:
                 local_index = get_u16(self.bytecode, cf.ip); cf.ip += 2
                 value = cf.value_stack.pop()
@@ -161,7 +204,15 @@ class Interpreter:
                 
                 for arg in args:
                     new_frame.value_stack.append(arg)
+            elif instr == InstructionType.CALL_NATIVE.value:
+                arg_count = get_u8(self.bytecode, cf.ip); cf.ip += 1
+                args = list(cf.value_stack.pop() for _ in range(arg_count))
+                args.reverse()
+                native_index = cf.value_stack.pop()
 
+                func = self.natives[native_index]
+                return_value = func(*args)
+                cf.value_stack.append(return_value)
             elif instr == InstructionType.RETURN.value:
                 return_value = cf.value_stack.pop()
                 self.call_stack.pop()
@@ -175,22 +226,3 @@ class Interpreter:
                 caller_frame.value_stack.append(return_value)
             else:
                 raise Exception(f"Some instruction we don't recognize. {instr}")
-
-    def _find_function_metadata(self, bytecode) -> dict[int, FunctionMetadata]:
-        funcs = {}
-
-        pointer = 0
-        while pointer < len(bytecode):
-            func_entrypoint = pointer
-            assert bytecode[pointer] == InstructionType.ENTER.value; pointer += 1
-
-            func_index = get_u16(bytecode, pointer); pointer += 2
-            func_args = get_u16(bytecode, pointer); pointer += 2
-            func_locals = get_u16(bytecode, pointer); pointer += 2
-            func_length = get_u32(bytecode, pointer); pointer += 4
-            pointer += func_length
-
-            func_metadata = FunctionMetadata(func_index, func_entrypoint, func_args, func_locals)
-            funcs[func_index] = func_metadata
-
-        return funcs

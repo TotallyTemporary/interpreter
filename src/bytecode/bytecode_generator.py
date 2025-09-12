@@ -12,33 +12,52 @@ def to_bytes(value: int, bytes=4, signed=False):
 class ProgramBytecodeGenerator():
     def __init__(self, entrypoints: list[Entrypoint]):
         self.entrypoints = entrypoints
-        self.func_placeholders: dict[int, Symbol] = {}
+        self.globals: dict[Symbol, int] = {}
+        self.functions: dict[Symbol, int] = {}
         self.bytecode: list[int] = []
+        self._global_placeholders: dict[int, Symbol] = {}
 
     def compile(self):
+        """Compile the program into bytecode."""
+
+        # add some padding in the start for fun
+        for _ in range(16):
+            self.bytecode.extend(to_bytes(InstructionType.NOOP.value, 1))
+
+        # Compile all funcs
         for index, entrypoint in enumerate(self.entrypoints):
             self._compile_func(entrypoint, index)
-        self._do_func_index_substitution()
+
+        self._decide_global_indexes()
+        self._substitute_global_indexes()
         return self.bytecode
 
-    def _do_func_index_substitution(self):
-        func_indices = self._get_func_indexes_dict()
-        for bytecode_index, placeholder_symbol in self.func_placeholders.items():
-            func_index = func_indices[placeholder_symbol]
-            self.bytecode[bytecode_index:bytecode_index+2] = to_bytes(func_index, 2)
+    def get_global_symbol_indices(self):
+        """Get the mapping from global symbol to index for all globals."""
+        return self.globals
 
-    def _get_func_indexes_dict(self) -> dict:
-        symbol_dict = {}
-        
-        symbols = [entrypoint.symbol for entrypoint in self.entrypoints]
-        for index, symbol in enumerate(symbols):
-            symbol_dict[symbol] = index
-        return symbol_dict
+    def get_functions_entrypoint_mapping(self):
+        """Get the mapping from symbol to entrypoint index for all functions."""
+        return self.functions
+
+    def _decide_global_indexes(self):
+        global_symbols = set(self._global_placeholders.values()) | set(self.functions.keys())
+        for index, symbol in enumerate(list(global_symbols)):
+            self.globals[symbol] = index
+
+    def _substitute_global_indexes(self):
+        for bytecode_index, placeholder_symbol in self._global_placeholders.items():
+            func_index = self.globals[placeholder_symbol]
+            self.bytecode[bytecode_index:bytecode_index+2] = to_bytes(func_index, 2)
 
     def _compile_func(self, entrypoint: Entrypoint, func_index: int):
         # compile the function
         func_bytecode_generator = FunctionBytecodeGenerator(entrypoint)
         func_bytecode = func_bytecode_generator.create_bytecode()
+
+        # make note for the interpreter where this function lies
+        function_bytecode_entrypoint_index = len(self.bytecode)
+        self.functions[entrypoint.symbol] = function_bytecode_entrypoint_index
 
         # add metadata for interpreter about our function
         self.bytecode.extend(to_bytes(InstructionType.ENTER.value, 1))      # header
@@ -50,12 +69,12 @@ class ProgramBytecodeGenerator():
         bytecode_start_index = len(self.bytecode)
         self.bytecode.extend(func_bytecode)
 
-        # keep track of the function globals, they've not been substituted in yet.
+        # keep track of the globals, we'll substitute them in once we've decided on their indices
         func_globals = {
             bytecode_start_index + index: glob
-            for index, glob in func_bytecode_generator.func_placeholders.items()
+            for index, glob in func_bytecode_generator.global_placeholders.items()
         }
-        self.func_placeholders.update(func_globals)
+        self._global_placeholders.update(func_globals)
 
 class FunctionBytecodeGenerator(InstructionVisitor):
     def __init__(self, entrypoint: Entrypoint):
@@ -67,7 +86,7 @@ class FunctionBytecodeGenerator(InstructionVisitor):
 
         self.instruction_to_byte_index_dict: dict[Instruction, int] = {} # filled out as bytecode is generated
         self.jump_placeholders: dict[int, Instruction] = {}
-        self.func_placeholders: dict[int, Symbol] = {}
+        self.global_placeholders: dict[int, Symbol] = {}
 
     def create_bytecode(self):
         self.visit(self.entrypoint.body)
@@ -106,11 +125,11 @@ class FunctionBytecodeGenerator(InstructionVisitor):
     def _get_local_index(self, symbol: Symbol):
         return to_bytes(self.symbol_to_index_dict[symbol], 2)
     
-    def _add_local_placeholder(self, instruction: Instruction):
+    def _add_jump_placeholder(self, instruction: Instruction):
         self.jump_placeholders[len(self.bytecode)] = instruction
 
-    def _add_func_placeholder(self, symbol: Symbol):
-        self.func_placeholders[len(self.bytecode)] = symbol
+    def _add_global_int_placeholder(self, symbol: Symbol):
+        self.global_placeholders[len(self.bytecode)] = symbol
 
     def visit(self, instruction):
         self.instruction_to_byte_index_dict[instruction] = len(self.bytecode)
@@ -141,10 +160,10 @@ class FunctionBytecodeGenerator(InstructionVisitor):
         self.bytecode.extend(self._get_local_index(instruction.var))
         self.visit_if_exists(instruction.next)
 
-    def visit_LoadFunc(self, instruction: LoadFunc):
-        self._log("LoadFunc")
-        self.bytecode.extend(to_bytes(InstructionType.LOAD_FUNC.value, 1))
-        self._add_func_placeholder(instruction.var)
+    def visit_LoadGlobalInt(self, instruction: LoadGlobalInt):
+        self._log("LoadGlobalInt")
+        self.bytecode.extend(to_bytes(InstructionType.LOAD_GLOBAL_INT.value, 1))
+        self._add_global_int_placeholder(instruction.var)
         self.bytecode.extend(to_bytes(0, 2))
         self.visit_if_exists(instruction.next)
 
@@ -221,7 +240,7 @@ class FunctionBytecodeGenerator(InstructionVisitor):
     def visit_Jump(self, instruction):
         self.bytecode.extend(to_bytes(InstructionType.JUMP.value, 1))
 
-        self._add_local_placeholder(instruction.instruction)
+        self._add_jump_placeholder(instruction.instruction)
         self.bytecode.extend(to_bytes(0, bytes=2, signed=True))
 
         self.visit_if_exists(instruction.next)
@@ -230,7 +249,7 @@ class FunctionBytecodeGenerator(InstructionVisitor):
         self._log("Jumpz")
         self.bytecode.extend(to_bytes(InstructionType.JUMPZ.value, 1))
 
-        self._add_local_placeholder(instruction.cond_instr)
+        self._add_jump_placeholder(instruction.cond_instr)
         self.bytecode.extend(to_bytes(0, bytes=2, signed=True))
 
         self.visit_if_exists(instruction.next)
@@ -239,7 +258,7 @@ class FunctionBytecodeGenerator(InstructionVisitor):
         self._log("Jumpnz")
         self.bytecode.extend(to_bytes(InstructionType.JUMPNZ.value, 1))
 
-        self._add_local_placeholder(instruction.cond_instr)
+        self._add_jump_placeholder(instruction.cond_instr)
         self.bytecode.extend(to_bytes(0, bytes=2, signed=True))
 
         self.visit_if_exists(instruction.next)
@@ -247,6 +266,12 @@ class FunctionBytecodeGenerator(InstructionVisitor):
     def visit_CallFunc(self, instruction):
         self._log("Call")
         self.bytecode.extend(to_bytes(InstructionType.CALL.value, 1))
+        self.bytecode.extend(to_bytes(instruction.arg_count, 1))
+        self.visit_if_exists(instruction.next)
+
+    def visit_CallNativeFunc(self, instruction):
+        self._log("CallNative")
+        self.bytecode.extend(to_bytes(InstructionType.CALL_NATIVE.value, 1))
         self.bytecode.extend(to_bytes(instruction.arg_count, 1))
         self.visit_if_exists(instruction.next)
 
@@ -268,8 +293,7 @@ class FunctionLocalVariableFinder(DefaultInstructionVisitor):
         self.symbols.add(instruction.var)
         self.visit_if_exists(instruction.next)
 
-    def visit_LoadFunc(self, instruction):
-        # TODO local funcs?
+    def visit_LoadGlobalInt(self, instruction):
         self.visit_if_exists(instruction.next)
 
     def visit_StoreLocalInt(self, instruction):
