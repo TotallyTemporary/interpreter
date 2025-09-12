@@ -8,6 +8,7 @@ from parser.type_checker import TypeChecker
 
 from bytecode.instruction_generator import InstructionGenerator
 from bytecode.bytecode_generator import ProgramBytecodeGenerator
+from bytecode.optimizer import FuncOptimizer
 
 from interpreter.interpreter import Interpreter
 
@@ -21,14 +22,11 @@ logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 print("---Tokenizer:")
 tokenizer = Tokenizer(
 """
-int fib(int n) is
-    if n == 0 then return 0
-    if n == 1 then return 1
-    return fib(n - 1) + fib(n - 2)
-
 void main() is
-    int result = fib(15)
-    print(result)
+    int n = 15
+    if n == 15 then
+        if n == 15 then
+            print(0)
 """)
 
 tokens = tokenizer.tokens()
@@ -49,11 +47,22 @@ print("---IR:")
 ir_generator = InstructionGenerator()
 ir_generator.visit(program)
 
-instruction = ir_generator.start
+for entrypoint in ir_generator.entrypoints:
+    print(f"Showing function '{entrypoint.symbol.name}'")
+    instruction = entrypoint.body
+    while instruction != None:
+        print(instruction)
+        instruction = instruction.next
 
-while instruction != None:
-    print(instruction)
-    instruction = instruction.next
+for entrypoint in ir_generator.entrypoints:
+    FuncOptimizer(entrypoint).optimize()
+
+for entrypoint in ir_generator.entrypoints:
+    print(f"Showing optimized function '{entrypoint.symbol.name}'")
+    instruction = entrypoint.body
+    while instruction != None:
+        print(instruction)
+        instruction = instruction.next
 
 print("---Bytecode:")
 bytecode_generator = ProgramBytecodeGenerator(ir_generator.entrypoints)

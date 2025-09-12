@@ -1,5 +1,3 @@
-from contextlib import contextmanager
-
 class InstructionVisitorException(Exception):
     pass
 
@@ -92,11 +90,11 @@ class DefaultInstructionVisitor(InstructionVisitor):
         self.visit_if_exists(instruction.next)
 
     def visit_JumpIfZero(self, instruction):
-        self.visit_if_exists(instruction.cond_instr)
+        # self.visit_if_exists(instruction.cond_instr)
         self.visit_if_exists(instruction.next)
 
     def visit_JumpIfNotZero(self, instruction):
-        self.visit_if_exists(instruction.cond_instr)
+        # self.visit_if_exists(instruction.cond_instr)
         self.visit_if_exists(instruction.next)
 
     def visit_CallFunc(self, instruction):

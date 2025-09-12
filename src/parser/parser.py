@@ -109,6 +109,9 @@ class Parser:
             return self.decl_statement()
         elif isinstance(current_token, NonKwSymbolToken) and isinstance(next_token, AssignToken):
             return self.assign_statement()
+        elif isinstance(current_token, NopToken):
+            self._expect(NopToken)
+            return BlockStatement([])
         else:
             return ExpressionStatementNode(self.expr())
 

@@ -20,6 +20,10 @@ class InstructionGenerator(AstVisitor):
         self.head.next = instruction
         self.head = instruction
 
+    def break_head(self, instruction):
+        """Don't link the previous instruction to this one."""
+        self.head = instruction
+
     def visit_ExpressionStatementNode(self, node):
         self.visit(node.expr)
         self.add_head(Pop())
@@ -121,7 +125,7 @@ class InstructionGenerator(AstVisitor):
         jump_back.cond_instr = before
 
     def visit_FuncDeclNode(self, node):
-        self.add_head(func_start := Label(f"FuncStart-{node.symbol.name}"))
+        self.break_head(func_start := Label(f"FuncStart-{node.symbol.name}"))
         param_symbols = [param.symbol for param in node.params]
         entrypoint = Entrypoint(
             node.symbol, func_start, param_symbols,

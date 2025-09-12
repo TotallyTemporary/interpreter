@@ -91,6 +91,10 @@ class KeywordToken(SymbolToken):
     def __init__(self, file, chars: str):
         super().__init__(file, chars)
 
+class NopToken(KeywordToken):
+    def __init__(self, file):
+        super().__init__(file, "nop")
+
 class IfToken(KeywordToken):
     def __init__(self, file):
         super().__init__(file, "if")
