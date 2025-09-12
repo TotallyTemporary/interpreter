@@ -93,7 +93,7 @@ class Parser:
         self._expect(DeIndentToken)
         return BlockStatement(statements)
 
-    # statement: expr | if_statement | return_statement | while_statement | do_while_statement | assign_statement | decl_statement
+    # statement: expr | if_statement | return_statement | while_statement | do_while_statement | assign_statement | decl_statement | expr
     def statement(self) -> StatementNode:
         current_token = self.file.current_token()
         next_token = self.file.next_token()
@@ -110,7 +110,7 @@ class Parser:
         elif isinstance(current_token, NonKwSymbolToken) and isinstance(next_token, AssignToken):
             return self.assign_statement()
         else:
-            raise UnexpectedTokenException(current_token, [ReturnToken, IfToken])
+            return ExpressionStatementNode(self.expr())
 
     # assign_statement: SYMBOL EQUALS expr
     def assign_statement(self) -> AssignmentNode:

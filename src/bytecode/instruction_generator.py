@@ -19,6 +19,10 @@ class InstructionGenerator(AstVisitor):
         self.head.next = instruction
         self.head = instruction
 
+    def visit_ExpressionStatementNode(self, node):
+        self.visit(node.expr)
+        self.add_head(Pop())
+
     def visit_BoolLiteralNode(self, node):
         value = 0 if node.value is False else 1
         self.add_head(LoadConstInt(value))

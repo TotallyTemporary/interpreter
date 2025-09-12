@@ -94,6 +94,9 @@ class TypeChecker(AstVisitor):
         CheckCodeAfterReturn().visit(root_node) # makes sure returns are always last in block
         CheckFuncsAlwaysReturn().visit(root_node) # makes sure all funcs return in all branches
 
+    def visit_ExpressionStatementNode(self, node):
+        self.visit(node.expr)
+
     def visit_BoolLiteralNode(self, node):
         return self.global_scope.lookup("bool")
 

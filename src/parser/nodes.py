@@ -7,6 +7,11 @@ class ExpressionNode(AstNode):
 class StatementNode(AstNode):
     pass
 
+class ExpressionStatementNode(StatementNode):
+    """An expression can be a statement, but we will need to pop the resulting value."""
+    def __init__(self, expr: ExpressionNode):
+        self.expr = expr
+
 class BoolLiteralNode(ExpressionNode):
     def __init__(self, value: bool):
         self.value = value

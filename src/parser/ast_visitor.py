@@ -30,6 +30,11 @@ class AstDebugVisitor(AstVisitor):
         yield
         self.indent -= 2
 
+    def visit_ExpressionStatementNode(self, node):
+        self.indent_print(f"ExprStatement")
+        with self.indented():
+            self.visit(node.expr)
+
     def visit_BoolLiteralNode(self, node):
         self.indent_print(f"Bool({node.value})")
 
@@ -107,6 +112,9 @@ class AstDebugVisitor(AstVisitor):
 
 
 class DefaultAstVisitor(AstVisitor):
+    def visit_ExpressionStatementNode(self, node):
+        self.visit(node.expr)
+
     def visit_BoolLiteralNode(self, node):
         pass
 
