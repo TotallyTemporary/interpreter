@@ -30,10 +30,10 @@ class Interpreter:
         self.call_stack: list[Frame] = []
 
     def run(self):
-        arg = 15
-        print(f"First arg: {arg}")
+        args = [15]
+        print(f"Args: {args}")
         frame = Frame(0)
-        frame.value_stack.append(arg)
+        frame.value_stack.extend(reversed(args))
         self.call_stack.append(frame) # TODO find main function!
 
         while True:

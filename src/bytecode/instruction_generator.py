@@ -103,20 +103,17 @@ class InstructionGenerator(AstVisitor):
         BeforeWhile:
             print "Inside loop"
             x + 2 == 0
-            JumpIfZero AfterWhile
-            Jump BeforeWhile
+            JumpIfNotZero BeforeWhile
         AfterWhile:
         """
         self.add_head(before := Label(f"BeforeWhile"))
         self.visit(node.body)
         self.visit(node.condition)
 
-        self.add_head(jump_over := JumpIfZero())
-        self.add_head(jump_back := Jump())
-        self.add_head(after := Label(f"AfterWhile"))
+        self.add_head(jump_back := JumpIfNotZero())
+        self.add_head(Label(f"AfterWhile"))
 
-        jump_back.instruction = before
-        jump_over.cond_instr = after
+        jump_back.cond_instr = before
 
     def visit_FuncDeclNode(self, node):
         self.add_head(func_start := Label(f"FuncStart-{node.symbol.name}"))
