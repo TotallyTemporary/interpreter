@@ -88,7 +88,7 @@ class Interpreter:
             cf = self.call_stack[-1]
             instr = self.bytecode[cf.ip]; cf.ip += 1
 
-            log.debug(f"{cf.ip} {InstructionType(instr)} ({','.join(str(value) for value in cf.value_stack)})")
+            # log.debug(f"{cf.ip} {InstructionType(instr)} ({','.join(str(value) for value in cf.value_stack)})")
 
             if instr == InstructionType.NOOP.value:
                 pass

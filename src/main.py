@@ -24,29 +24,18 @@ log = logging.getLogger(__name__)
 log.debug("---Tokenizer:")
 tokenizer = Tokenizer(
 """
-class Vector3i is
+class Vector2i is
     int x
     int y
-    int z
 
-    void new(int x, int y, int z) is
+    void new(int x, int y) is
         this.x = x
         this.y = y
-        this.z = z
-
-    Vector3i add(Vector3i other) is
-        return new Vector3i(this.x + other.x, this.y + other.y, this.z + other.z)
-
-
+    void move() is
+        this.x = this.x + 1
+        this.y = this.y - 1
 void main() is
-    Vector3i pos = new Vector3i(1, 0, 0)
-    Vector3i anew = pos.add(new Vector3i(0, 1, 1))
-    print(pos.x)
-    print(pos.y)
-    print(pos.z)
-    print(anew.x)
-    print(anew.y)
-    print(anew.z)
+    Vector2i pos = new Vector2i(0, 0)
 """)
 
 tokens = tokenizer.tokens()

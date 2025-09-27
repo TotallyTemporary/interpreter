@@ -1,6 +1,7 @@
-import random
 import logging
+from collections import defaultdict
 from bytecode.instructions import *
+from bytecode.stack_value import StackValue
 from bytecode.instruction_generator import Entrypoint
 from bytecode.instruction_visitor import InstructionVisitor, DefaultInstructionVisitor
 
@@ -18,33 +19,41 @@ class FuncOptimizer:
         self.instructions = get_instruction_list(self.entrypoint.body)
         self.blocks = get_blocks(self.entrypoint.body)
 
-        optimizations = [self.remove_nops] # ...TODO add more!
+        optimizations = [
+            self.remove_nops,
+            self.duplications,
+            self.constant_folding,
+        ]
 
         rounds = 0
+        last_change_made_in_round = 0
         while True:
             rounds += 1
             log.info(f"Optimizing round #{rounds}")
             # Optimize something
-            optimization_func = random.choice(optimizations)
+            optimization_func = optimizations[rounds % len(optimizations)]
             optimization_func()
 
-            # Only stop optimizing while we're not making changes
             new_instructions = get_instruction_list(self.entrypoint.body)
-            if all(instr1 == instr2 for instr1, instr2 in zip(self.instructions, new_instructions)):
+
+            # let's check if we've made any changes with our optimizations
+            if not all(instr1 == instr2 for instr1, instr2 in zip(self.instructions, new_instructions)):
+                last_change_made_in_round = rounds
+            if rounds - last_change_made_in_round >= len(optimizations):
                 break
+
             self.instructions = new_instructions
             self.blocks = get_blocks(self.entrypoint.body)
     
     def remove_nops(self):
         """Remove no-ops, code which does nothing. This includes literal no-ops, as well as code like load+pop."""
-        # Only do nop-removal within a block (delineated by jumps and returns)
         for instructions in self.blocks:
             index = 0
             while index < len(instructions):
                 instr = instructions[index]
                 next_instr = instructions[index+1] if index+1 < len(instructions) else None
                 index += 1
-                
+
                 if next_instr is not None:
                     # delete nops and labels
                     if isinstance(instr, NoOp) or isinstance(instr, Label):
@@ -75,6 +84,56 @@ class FuncOptimizer:
                             self._replace_instr(instr, Dup(next=instr))
                             instr.next = next_instr.next
 
+    def duplications(self):
+        for block in self.blocks:
+            before_lst, after_lst = get_stack_values_for_block(block)
+
+            for index, (instr, stack_before, stack_after) in enumerate(zip(block, before_lst, after_lst)):
+                # only optimize for these types
+                allowed_instr_types = [LoadLocalInt, LoadGlobalInt]
+                if not any(isinstance(instr, instr_type) for instr_type in allowed_instr_types):
+                    continue
+
+                # If there exists a instruction that adds a value to the stack
+                if stack_before == [] and len(stack_after) == 1:
+                    value = stack_after[0]
+                    # And there exists an instruction before it that adds that value to the stack
+                    for prev_instr, prev_after in zip(block[:index], after_lst[:index]):
+                        if len(prev_after) == 1 and prev_after[0] == value:
+                            # We reuse the previous value using a Dup and remove the second load.
+                            log.debug(f"Double use of the same load, add a Dup. '%s' and '%s'", prev_instr, instr)
+                            dup = Dup(next=prev_instr.next)
+                            prev_instr.next = dup
+                            self._replace_instr(instr, NoOp(next=instr.next))
+                            return
+
+    def constant_folding(self):
+        for block in self.blocks:
+            before_lst, after_lst = get_stack_values_for_block(block)
+
+            # if we already know the result of a calculation at compile time, we can just load a constant.
+            for instr, _, stack_after in zip(block, before_lst, after_lst):
+                if len(stack_after) == 0 or stack_after[-1].is_known is False:
+                    continue
+
+                # [x, y] -> [res: int]
+                if any(isinstance(instr, instr_type) for instr_type in [Add, Sub, Mul, Div]):
+                    log.debug(f"Constant folded %s into a constant load.", instr)
+                    self._replace_instr_lst(instr, [
+                        Pop(),
+                        Pop(),
+                        LoadConstInt(value=stack_after[-1].key)
+                    ])
+                # [x, y] -> [res: bool]
+                if any(isinstance(instr, instr_type) for instr_type in [Equals, NotEquals, LessThan, LessThanEquals, GreaterThan, GreaterThanEquals, Or, And]):
+                    log.debug(f"Constant folded %s into a constant load.", instr)
+                    self._replace_instr_lst(instr, [
+                        Pop(),
+                        Pop(),
+                        LoadConstInt(value=stack_after[-1].key)
+                    ])
+
+
     def _replace_instr(self, instr: Instruction, replace_with: Instruction):
         for node in self.instructions:
             if getattr(node, "next", None) == instr:
@@ -86,6 +145,26 @@ class FuncOptimizer:
 
         if self.entrypoint.body == instr:
             self.entrypoint.body = replace_with # if this is the entrypoint, replace entrypoint as well
+        return replace_with
+
+    def _replace_instr_lst(self, instr: Instruction, replace_with_lst: list[Instruction]):
+        for node in self.instructions:
+            if getattr(node, "next", None) == instr:
+                node.next = replace_with_lst[0] # pointer to next instruction
+            if getattr(node, "instruction", None) == instr:
+                node.instruction = replace_with_lst[0] # jump instruction target
+            if getattr(node, "cond_instr", None) == instr:
+                node.cond_instr = replace_with_lst[0] # conditional target
+
+        if self.entrypoint.body == instr:
+            self.entrypoint.body = replace_with_lst[0] # if this is the entrypoint, replace entrypoint as well
+
+        # chain these together for convenience
+        for index in range(len(replace_with_lst)-1):
+            replace_with_lst[index].next = replace_with_lst[index+1]
+        replace_with_lst[-1].next = instr.next
+
+        return replace_with_lst[-1]
 
 def get_blocks(root_instr: Instruction):
     """Split instructions into basic blocks, delineated by jumps, jump targets and returns."""
@@ -138,7 +217,6 @@ def get_blocks(root_instr: Instruction):
 
     return blocks
 
-
 def get_instruction_list(root_instr: Instruction):
     all_instructions = []
     class ListerVisitor(DefaultInstructionVisitor):
@@ -148,3 +226,78 @@ def get_instruction_list(root_instr: Instruction):
     
     ListerVisitor().visit(root_instr)
     return all_instructions
+
+def get_stack_values_for_block(block: list[Instruction]):
+    globs = defaultdict(lambda: StackValue.unknown(expr="UnknownGlobal"))
+    locals = defaultdict(lambda: StackValue.unknown(expr="UnknownLocal"))
+    before = []
+    after = []
+    current = []
+    for instr in block:
+        before.append(current.copy())
+
+        match instr:
+            case LoadConstInt() as i:
+                current.append(StackValue.const(i.value))
+            case LoadLocalInt() as i:
+                current.append(locals[i.var])
+            case LoadGlobalInt() as i:
+                current.append(globs[i.var])
+            case StoreLocalInt() as i:
+                value = current.pop()
+                locals[i.var] = value
+            case NewObject() as i:
+                current.append(StackValue.unknown(expr=f"NewObject{i.number_of_fields}"))
+            case SetField() as i:
+                current.pop()
+                current.pop()
+            case GetField() as i:
+                current.pop()
+                current.append(StackValue.unknown(expr=f"GetField({i.var.name})"))
+            case Pop() as i:
+                current.pop()
+            case Dup() as i:
+                value = current.pop()
+                current.append(value)
+                current.append(value)
+            case Swap() as i:
+                value1 = current.pop()
+                value2 = current.pop()
+                current.append(value1)
+                current.append(value2)
+            case Add() as i:
+                current.append(StackValue.add(current.pop(), current.pop()))
+            case Sub() as i:
+                current.append(StackValue.sub(current.pop(), current.pop()))
+            case Mul() as i:
+                current.append(StackValue.mul(current.pop(), current.pop()))
+            case Div() as i:
+                current.append(StackValue.div(current.pop(), current.pop()))
+            case Equals():
+                current.append(StackValue.eq(current.pop(), current.pop()))
+            case NotEquals():
+                current.append(StackValue.neq(current.pop(), current.pop()))
+            case LessThan():
+                current.append(StackValue.lt(current.pop(), current.pop()))
+            case LessThanEquals():
+                current.append(StackValue.lte(current.pop(), current.pop()))
+            case GreaterThan():
+                current.append(StackValue.gt(current.pop(), current.pop()))
+            case GreaterThanEquals():
+                current.append(StackValue.gte(current.pop(), current.pop()))
+            case Or():
+                current.append(StackValue.oor(current.pop(), current.pop()))
+            case And():
+                current.append(StackValue.aand(current.pop(), current.pop()))
+            case CallFunc() as i:
+                args = (current.pop() for _ in range(i.arg_count))
+                entrypoint = current.pop()
+                current.append(StackValue.unknown(expr=f"FuncCall"))
+            case CallNativeFunc() as i:
+                args = (current.pop() for _ in range(i.arg_count))
+                entrypoint = current.pop()
+                current.append(StackValue.unknown(expr=f"NativeFuncCall"))
+            case Return() as i:
+                current.pop()
+        after.append(current.copy())
+    return before, after
