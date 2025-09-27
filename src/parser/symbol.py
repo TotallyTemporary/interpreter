@@ -14,9 +14,24 @@ class Symbol():
 
     def __repr__(self):
         return f"Symbol({self.name},{self.type})"
-    
+
+class ClassSymbol(Symbol):
+    def __init__(self, name: str, type: "Symbol" = None):
+        super().__init__(name, type)
+        self.inside: ScopedSymbolTable | None = None # filled by type checker
+        self.fields: list[Symbol] | None = None
+
+class ClassFieldSymbol(Symbol):
+    def __init__(self, name: str, type: "Symbol" = None, class_type: "ClassSymbol" = None):
+        self.name = name
+        self.type = type
+        self.class_type = class_type
+
+    def __repr__(self):
+        return f"Field({self.name},{self.type},{self.class_type})"
+
 class FuncSymbol(Symbol):
-    def __init__(self, name: str, type: "Symbol" = None, return_type: "Symbol" = None, arg_symbols: list["Symbol"] = []):
+    def __init__(self, name: str, type: "Symbol" = None, return_type: "Symbol" = None, arg_symbols: list["Symbol"] = None):
         super().__init__(name, type)
         self.return_type = return_type
         self.arg_symbols = arg_symbols

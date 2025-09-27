@@ -15,61 +15,82 @@ from interpreter.interpreter import Interpreter
 # setup logging
 import logging
 import sys
-logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
+if False: # show debug
+    logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
+log = logging.getLogger(__name__)
 
-print("---Tokenizer:")
+log.debug("---Tokenizer:")
 tokenizer = Tokenizer(
 """
+class Vector3i is
+    int x
+    int y
+    int z
+
+    void new(int x, int y, int z) is
+        this.x = x
+        this.y = y
+        this.z = z
+
+    Vector3i add(Vector3i other) is
+        return new Vector3i(this.x + other.x, this.y + other.y, this.z + other.z)
+
+
 void main() is
-    int n = 15
-    if n == 15 then
-        if n == 15 then
-            print(0)
+    Vector3i pos = new Vector3i(1, 0, 0)
+    Vector3i anew = pos.add(new Vector3i(0, 1, 1))
+    print(pos.x)
+    print(pos.y)
+    print(pos.z)
+    print(anew.x)
+    print(anew.y)
+    print(anew.z)
 """)
 
 tokens = tokenizer.tokens()
 
 for token in tokens:
-    print(token)
+    log.debug(token)
 
-print("---Parser:")
+log.debug("---Parser:")
 parser = Parser(tokens)
 program = parser.program()
-AstDebugVisitor().visit(program)
 
-print("---Type checker:")
+log.debug("---Type checker:")
 type_checker = TypeChecker()
 type_checker.do_type_checking(program)
 
-print("---IR:")
+AstDebugVisitor().visit(program)
+
+log.debug("---IR:")
 ir_generator = InstructionGenerator()
 ir_generator.visit(program)
 
 for entrypoint in ir_generator.entrypoints:
-    print(f"Showing function '{entrypoint.symbol.name}'")
+    log.debug(f"Showing function '{entrypoint.symbol.name}'")
     instruction = entrypoint.body
     while instruction != None:
-        print(instruction)
+        log.debug(instruction)
         instruction = instruction.next
 
 for entrypoint in ir_generator.entrypoints:
     FuncOptimizer(entrypoint).optimize()
 
 for entrypoint in ir_generator.entrypoints:
-    print(f"Showing optimized function '{entrypoint.symbol.name}'")
+    log.debug(f"Showing optimized function '{entrypoint.symbol.name}'")
     instruction = entrypoint.body
     while instruction != None:
         print(instruction)
         instruction = instruction.next
 
-print("---Bytecode:")
+log.debug("---Bytecode:")
 bytecode_generator = ProgramBytecodeGenerator(ir_generator.entrypoints)
 bytecode = bytecode_generator.compile()
 global_symbol_indices = bytecode_generator.get_global_symbol_indices()
 function_entrypoints = bytecode_generator.get_functions_entrypoint_mapping()
 
-print("---Interpreter:")
+log.debug("---Interpreter:")
 interpreter = Interpreter(bytecode, global_symbol_indices, function_entrypoints)
 interpreter.run()

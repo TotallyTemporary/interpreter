@@ -38,6 +38,10 @@ class CommaToken(SimpleToken):
     def __init__(self, file):
         super().__init__(file, ",")
 
+class DotToken(SimpleToken):
+    def __init__(self, file):
+        super().__init__(file, ".")
+
 class AssignToken(SimpleToken):
     def __init__(self, file):
         super().__init__(file, "=")
@@ -83,6 +87,9 @@ class SymbolToken(Token):
         super().__init__(file)
         self.chars = chars
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}('{self.chars}')"
+
 class NonKwSymbolToken(SymbolToken):
     def __init__(self, file, chars: str):
         super().__init__(file, chars)
@@ -102,6 +109,14 @@ class IfToken(KeywordToken):
 class WhileToken(KeywordToken):
     def __init__(self, file):
         super().__init__(file, "while")
+
+class ClassToken(KeywordToken):
+    def __init__(self, file):
+        super().__init__(file, "class")
+
+class NewToken(KeywordToken):
+    def __init__(self, file):
+        super().__init__(file, "new")
 
 class IsToken(KeywordToken):
     def __init__(self, file):

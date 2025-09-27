@@ -1,4 +1,4 @@
-from parser.symbol import Symbol
+from parser.symbol import Symbol, ClassFieldSymbol
 from parser.ast_visitor import AstVisitor
 from parser.nodes import *
 from bytecode.instructions import *
@@ -65,12 +65,64 @@ class InstructionGenerator(AstVisitor):
         self.add_head(Return())
 
     def visit_DeclarationNode(self, node):
-        self.visit(node.assign_expr)
-        self.add_head(StoreLocalInt(node.symbol))
+        if node.assign_expr is not None:
+            self.visit(node.assign_expr)
+            self.add_head(StoreLocalInt(node.symbol))
 
-    def visit_AssignmentNode(self, node):
-        self.visit(node.assign_expr)
-        self.add_head(StoreLocalInt(node.symbol))
+    def _push_field_object(self, lhs: MemberNode | VariableNode):
+        if isinstance(lhs, VariableNode):
+            self.add_head(LoadLocalInt(lhs.symbol))
+            return
+        elif isinstance(lhs, MemberNode):
+            self._push_field_object(lhs.left)
+            self.add_head(GetField(lhs.symbol))
+        else:
+            raise Exception("No!")
+
+    def visit_AssignmentNode(self, assign_node: AssignmentNode):
+        is_field = isinstance(assign_node.symbol, ClassFieldSymbol)
+
+        if is_field:
+            lhs: MemberNode = assign_node.left
+            self._push_field_object(lhs.left) # this.x, push `this` onto stack
+            self.visit(assign_node.assign_expr)
+            self.add_head(SetField(lhs.symbol))
+            return
+
+        self.visit(assign_node.assign_expr)
+        self.add_head(StoreLocalInt(assign_node.symbol))
+
+    def visit_MemberNode(self, node: MemberNode):
+        self.visit(node.left)
+        self.add_head(GetField(node.symbol))
+
+    def visit_NewNode(self, node: NewNode):
+        # Create a new object on the heap, store its pointer in the stack
+        field_count = len(node.symbol.fields)
+        self.add_head(NewObject(field_count))   
+
+        self.add_head(Dup()) # one goes in as a param to the constructor, other is the return value
+
+        # First, push function
+        constructor = node.constructor_symbol
+        self.add_head(LoadGlobalInt(constructor)) 
+        
+        # we need function before args
+        self.add_head(Swap())
+
+        # Add args
+        for arg in node.expressions:
+            self.visit(arg)
+
+        # Call constructor
+        is_native = NativeFuncs.is_native_func(constructor)
+        args_count = len(constructor.arg_symbols)
+        if not is_native:
+            self.add_head(CallFunc(arg_count=args_count))
+        else:
+            self.add_head(CallNativeFunc(arg_count=args_count))
+
+        self.add_head(Pop()) # ignore the return value of the constructor, it's a void zero anyway.
 
     def visit_BlockStatement(self, node):
         for child in node.statements:
@@ -141,16 +193,36 @@ class InstructionGenerator(AstVisitor):
 
     def visit_FuncCallNode(self, node: FuncCallNode):
         is_native = NativeFuncs.is_native_func(node.symbol)
+        is_member = isinstance(node.left, MemberNode)
 
+        # First, push function
         self.add_head(LoadGlobalInt(node.symbol))
+
+        args_count = len(node.expressions)
+
+        # If a member, then `this` is the first argument
+        if is_member:
+            self.visit(node.left.left)
+            args_count += 1
+
+        # Add rest args
         for arg in node.expressions:
             self.visit(arg)
 
+        # Call
         if not is_native:
-            self.add_head(CallFunc(arg_count=len(node.expressions)))
+            self.add_head(CallFunc(arg_count=args_count))
         else:
-            self.add_head(CallNativeFunc(arg_count=len(node.expressions)))
+            self.add_head(CallNativeFunc(arg_count=args_count))
+
+    def visit_ClassDeclNode(self, node: ClassDeclNode):
+        for var_decl in node.var_decls:
+            self.visit(var_decl)
+        for func in node.funcs:
+            self.visit(func)
 
     def visit_ProgramNode(self, node):
+        for class_decl in node.classes:
+            self.visit(class_decl)
         for func in node.funcs:
             self.visit(func)

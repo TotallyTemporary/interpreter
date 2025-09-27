@@ -41,8 +41,8 @@ class DeclarationNode(StatementNode):
         self.assign_expr = assign_expr
 
 class AssignmentNode(StatementNode):
-    def __init__(self, name: str, assign_expr: ExpressionNode):
-        self.name = name
+    def __init__(self, left: ExpressionNode, assign_expr: ExpressionNode):
+        self.left = left
         self.assign_expr = assign_expr
 
 class BlockStatement(StatementNode):
@@ -65,14 +65,24 @@ class DoWhileNode(StatementNode):
         self.body = body
 
 class FuncCallNode(ExpressionNode):
-    def __init__(self, name: str, expressions: list[ExpressionNode]):
-        self.name = name
+    def __init__(self, left: ExpressionNode, expressions: list[ExpressionNode]):
+        self.left = left
         self.expressions = expressions
 
 class ParamNode(AstNode):
     def __init__(self, type: str, name: str):
         self.type = type
         self.name = name
+
+class NewNode(ExpressionNode):
+    def __init__(self, name: str, expressions: list[ExpressionNode]):
+        self.name = name
+        self.expressions = expressions
+
+class MemberNode(ExpressionNode):
+    def __init__(self, left: ExpressionNode, attr: str):
+        self.left = left
+        self.attr = attr
 
 class FuncDeclNode(AstNode):
     def __init__(self, type: str, name: str, params: list[ParamNode], body: StatementNode):
@@ -81,6 +91,13 @@ class FuncDeclNode(AstNode):
         self.params = params
         self.body = body
 
-class ProgramNode(AstNode):
-    def __init__(self, funcs: FuncDeclNode):
+class ClassDeclNode(AstNode):
+    def __init__(self, name: str, funcs: FuncDeclNode, var_decls: DeclarationNode):
+        self.name = name
         self.funcs = funcs
+        self.var_decls = var_decls
+
+class ProgramNode(AstNode):
+    def __init__(self, funcs: list[FuncDeclNode], classes: list[ClassDeclNode]):
+        self.funcs = funcs
+        self.classes = classes

@@ -28,6 +28,10 @@ class Frame:
         self.locals = None # don't worry, the ENTER instruction will fill these up for us. we don't as a caller yet know how many locals a func has.
         self.value_stack = []
 
+class HeapObject:
+    def __init__(self, number_of_fields: int):
+        self.fields = [None]*number_of_fields
+
 class Interpreter:
     def __init__(self, bytecode, global_symbol_indices: dict[Symbol, int], function_entrypoints: dict[Symbol, int]):
         self.bytecode = bytecode
@@ -38,6 +42,7 @@ class Interpreter:
 
         self.globals = [None]*len(global_symbol_indices)
         self.natives = list(self._natives_dict.values())
+        self.heap: list[HeapObject] = [None]*10
         self.call_stack: list[Frame] = []
         self._fill_globals()
 
@@ -72,7 +77,7 @@ class Interpreter:
 
     def run(self):
         args = []
-        print(f"Args: {args}")
+        log.debug(f"Args: {args}")
 
         main_func_ip = self._find_main_function()
         frame = Frame(main_func_ip)
@@ -83,8 +88,7 @@ class Interpreter:
             cf = self.call_stack[-1]
             instr = self.bytecode[cf.ip]; cf.ip += 1
 
-            # header_size = 12 # don't worry about it - matches our logging better without ENTER statement...
-            # print(f"{cf.ip - header_size} {InstructionType(instr)} ({','.join(str(value) for value in cf.value_stack)})")
+            log.debug(f"{cf.ip} {InstructionType(instr)} ({','.join(str(value) for value in cf.value_stack)})")
 
             if instr == InstructionType.NOOP.value:
                 pass
@@ -218,11 +222,32 @@ class Interpreter:
                 self.call_stack.pop()
 
                 if len(self.call_stack) == 0:
-                    print("Main function returned!")
-                    print(f"Return code: {return_value}")
+                    log.debug("Main function returned!")
+                    log.debug(f"Return value: {return_value}")
+
+                    log.debug("Heap: ")
+                    for idx, obj in enumerate(self.heap):
+                        log.debug("%s %s", idx, getattr(obj, "fields", None))
                     break
                 
                 caller_frame = self.call_stack[-1]
                 caller_frame.value_stack.append(return_value)
+            elif instr == InstructionType.NEWOBJECT.value:
+                field_count = get_u8(self.bytecode, cf.ip); cf.ip += 1
+                heap_object = HeapObject(field_count)
+                index = len(self.heap)
+                self.heap.append(heap_object)
+                cf.value_stack.append(index)
+            elif instr == InstructionType.GETFIELD.value:
+                var_index = get_u8(self.bytecode, cf.ip); cf.ip += 1
+                object_index = cf.value_stack.pop()
+                value = self.heap[object_index].fields[var_index]
+                cf.value_stack.append(value)
+            elif instr == InstructionType.SETFIELD.value:
+                var_index = get_u8(self.bytecode, cf.ip); cf.ip += 1
+                value = cf.value_stack.pop()
+                object_index = cf.value_stack.pop()
+                self.heap[object_index].fields[var_index] = value
+
             else:
                 raise Exception(f"Some instruction we don't recognize. {instr}")

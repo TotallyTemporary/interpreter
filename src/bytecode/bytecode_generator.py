@@ -1,7 +1,10 @@
+import logging
 from parser.symbol import Symbol
 from bytecode.instructions import *
 from bytecode.instruction_visitor import InstructionVisitor, DefaultInstructionVisitor
 from bytecode.instruction_generator import Entrypoint
+
+log = logging.getLogger(__name__)
 
 def to_bytes(value: int, bytes=4, signed=False):
     """
@@ -19,10 +22,6 @@ class ProgramBytecodeGenerator():
 
     def compile(self):
         """Compile the program into bytecode."""
-
-        # add some padding in the start for fun
-        for _ in range(16):
-            self.bytecode.extend(to_bytes(InstructionType.NOOP.value, 1))
 
         # Compile all funcs
         for index, entrypoint in enumerate(self.entrypoints):
@@ -136,7 +135,7 @@ class FunctionBytecodeGenerator(InstructionVisitor):
         super().visit(instruction)
 
     def _log(self, msg):
-        print(f"{len(self.bytecode)}: {msg}")
+        log.debug(f"{len(self.bytecode)}: {msg}")
 
     def visit_NoOp(self, instruction):
         self._log("NoOp")
@@ -184,10 +183,12 @@ class FunctionBytecodeGenerator(InstructionVisitor):
         self.visit_if_exists(instruction.next)
 
     def visit_Swap(self, instruction):
+        self._log("Swap")
         self.bytecode.extend(to_bytes(InstructionType.SWAP.value, 1))
         self.visit_if_exists(instruction.next)
 
     def visit_Add(self, instruction):
+        self._log("Add")
         self.bytecode.extend(to_bytes(InstructionType.ADD.value, 1))
         self.visit_if_exists(instruction.next)
 
@@ -197,10 +198,12 @@ class FunctionBytecodeGenerator(InstructionVisitor):
         self.visit_if_exists(instruction.next)
 
     def visit_Mul(self, instruction):
+        self._log("Mul")
         self.bytecode.extend(to_bytes(InstructionType.MUL.value, 1))
         self.visit_if_exists(instruction.next)
 
     def visit_Div(self, instruction):
+        self._log("Div")
         self.bytecode.extend(to_bytes(InstructionType.DIV.value, 1))
         self.visit_if_exists(instruction.next)
 
@@ -264,7 +267,7 @@ class FunctionBytecodeGenerator(InstructionVisitor):
         self.visit_if_exists(instruction.next)
 
     def visit_CallFunc(self, instruction):
-        self._log("Call")
+        self._log(f"Call ({instruction.arg_count} args)")
         self.bytecode.extend(to_bytes(InstructionType.CALL.value, 1))
         self.bytecode.extend(to_bytes(instruction.arg_count, 1))
         self.visit_if_exists(instruction.next)
@@ -278,6 +281,28 @@ class FunctionBytecodeGenerator(InstructionVisitor):
     def visit_Return(self, instruction):
         self._log("Return")
         self.bytecode.extend(to_bytes(InstructionType.RETURN.value, 1))
+        self.visit_if_exists(instruction.next)
+
+    def visit_GetField(self, instruction: GetField):
+        var_symbol = instruction.var
+        var_index = var_symbol.class_type.fields.index(var_symbol)
+
+        self.bytecode.extend(to_bytes(InstructionType.GETFIELD.value, 1))
+        self.bytecode.extend(to_bytes(var_index, 1))
+        self.visit_if_exists(instruction.next)
+    
+    def visit_SetField(self, instruction: SetField):
+        var_symbol = instruction.var
+        var_index = var_symbol.class_type.fields.index(var_symbol)
+
+        self.bytecode.extend(to_bytes(InstructionType.SETFIELD.value, 1))
+        self.bytecode.extend(to_bytes(var_index, 1))
+        self.visit_if_exists(instruction.next)
+
+    def visit_NewObject(self, instruction: NewObject):
+        self._log(f"NewObject ({instruction.number_of_fields} fields)")
+        self.bytecode.extend(to_bytes(InstructionType.NEWOBJECT.value, 1))
+        self.bytecode.extend(to_bytes(instruction.number_of_fields, 1))
         self.visit_if_exists(instruction.next)
 
 class FunctionLocalVariableFinder(DefaultInstructionVisitor):

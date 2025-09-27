@@ -44,13 +44,13 @@ class FuncOptimizer:
                 instr = instructions[index]
                 next_instr = instructions[index+1] if index+1 < len(instructions) else None
                 index += 1
-
-                # delete nops and labels
-                if isinstance(instr, NoOp) or isinstance(instr, Label):
-                    log.debug(f"Eliding nop: replacing '%s' with '%s'", instr, instr.next)
-                    self._replace_instr(instr, instr.next)
-
+                
                 if next_instr is not None:
+                    # delete nops and labels
+                    if isinstance(instr, NoOp) or isinstance(instr, Label):
+                        log.debug(f"Eliding nop: replacing '%s' with '%s'", instr, next_instr)
+                        self._replace_instr(instr, next_instr)
+
                     # delete assign into itself
                     if (
                         isinstance(instr, LoadLocalInt)

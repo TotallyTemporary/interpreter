@@ -1,11 +1,18 @@
 import inspect
 from typing import get_type_hints
-from parser.symbol import Symbol, FuncSymbol, TypeSymbol
+from parser.symbol import Symbol, FuncSymbol, TypeSymbol, ClassSymbol, ScopedSymbolTable, SymbolTable
+
+GLOBAL_SCOPE = ScopedSymbolTable("global")
+
+FUNC_TYPE = TypeSymbol("__function")
+CLASS_TYPE = TypeSymbol("__class")
+VOID_TYPE = TypeSymbol("void")
 
 INT_TYPE = TypeSymbol("int")
 BOOL_TYPE = TypeSymbol("bool")
-FUNC_TYPE = TypeSymbol("__function")
-VOID_TYPE = TypeSymbol("void")
+
+for symbol in [FUNC_TYPE, CLASS_TYPE, VOID_TYPE, INT_TYPE, BOOL_TYPE]:
+    GLOBAL_SCOPE.define(symbol)
 
 # collect everything into this global list
 NATIVE_FUNCTIONS = []

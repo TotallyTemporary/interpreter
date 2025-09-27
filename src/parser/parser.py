@@ -21,6 +21,11 @@ class ParserFile:
         if self.index + 1 >= len(self.tokens):
             raise UnexpectedEofException(self.tokens[-1])
         return self.tokens[self.index+1]
+    
+    def next_next_token(self):
+        if self.index + 2 >= len(self.tokens):
+            raise UnexpectedEofException(self.tokens[-1])
+        return self.tokens[self.index+2]
 
     def advance(self):
         self.index += 1
@@ -30,18 +35,53 @@ class Parser:
     def __init__(self, tokens: list[Token]):
         self.file = ParserFile(tokens)
 
-    # program: func_decl* EOF
+    # program: (func_decl_list | class_decl)* EOF
     def program(self):
         funcs = []
+        classes = []
         while not isinstance(self.file.current_token(), EofToken):
-            func = self.func_decl()
-            funcs.append(func)
-        return ProgramNode(funcs)
+            if isinstance(self.file.current_token(), ClassToken):
+                class_decl = self.class_decl()
+                classes.append(class_decl)
+            elif isinstance(self.file.current_token(), SymbolToken):
+                func = self.func_decl()
+                funcs.append(func)
+
+        return ProgramNode(funcs, classes)
+
+    # class_decl: CLASS SYMBOL IS func_decl_list
+    def class_decl(self) -> ClassDeclNode:
+        self._expect(ClassToken)
+        class_name = self._expect(NonKwSymbolToken).chars
+        self._expect(IsToken)
+
+        func_decls = []
+        var_decls = []
+
+        # TODO one-line non-indented classes with nop or something
+        self._expect(IndentToken)
+
+        # Either var decl or func decl
+        # int x = 0...
+        # int x, y...
+        # int x
+        # int x()
+        while not isinstance(self.file.current_token(), DeIndentToken):
+            if isinstance(self.file.next_next_token(), LParenToken):
+                func_decl = self.func_decl()
+                func_decls.append(func_decl)
+            else:
+                var_decl = self.class_var_decl_statement()
+                var_decls.append(var_decl)
+
+        self._expect(DeIndentToken)
+
+        return ClassDeclNode(class_name, func_decls, var_decls)
 
     # func_decl: SYMBOL SYMBOL LPAREN param_list RPAREN IS block
-    def func_decl(self):
+    def func_decl(self) -> FuncDeclNode:
         type_token = self._expect(NonKwSymbolToken)
-        name_token = self._expect(NonKwSymbolToken)
+        name_token = self._expect([NonKwSymbolToken, NewToken]) # 'new' can be name of constructor function
         self._expect(LParenToken)
         params = self.param_list()
         self._expect(RParenToken)
@@ -107,20 +147,22 @@ class Parser:
             return self.do_while_statement()
         elif isinstance(current_token, NonKwSymbolToken) and isinstance(next_token, NonKwSymbolToken):
             return self.decl_statement()
-        elif isinstance(current_token, NonKwSymbolToken) and isinstance(next_token, AssignToken):
-            return self.assign_statement()
         elif isinstance(current_token, NopToken):
             self._expect(NopToken)
             return BlockStatement([])
         else:
-            return ExpressionStatementNode(self.expr())
+            # bit of a hack, but we can't look far enough in tokens to determine whether this is an expression or assignment
+            # example: a.b.c.d.e = 0 vs. a.b.c.d.e
+            left = self.expr()
+            if isinstance(self.file.current_token(), AssignToken):
+                return self.assign_statement(left)
+            return ExpressionStatementNode(left)
 
     # assign_statement: SYMBOL EQUALS expr
-    def assign_statement(self) -> AssignmentNode:
-        name = self._expect(NonKwSymbolToken).chars
+    def assign_statement(self, left: ExpressionNode) -> AssignmentNode:
         self._expect(AssignToken)
         expr = self.expr()
-        return AssignmentNode(name, expr)
+        return AssignmentNode(left, expr)
 
     # decl_statement: SYMBOL SYMBOL EQUALS expr
     def decl_statement(self) -> DeclarationNode:
@@ -129,6 +171,13 @@ class Parser:
         self._expect(AssignToken)
         expr = self.expr()
         return DeclarationNode(type, name, expr)
+    
+    # TODO default class vars?
+    # class_var_decl_statement: SYMBOL SYMBOL
+    def class_var_decl_statement(self) -> DeclarationNode:
+        type = self._expect(NonKwSymbolToken).chars
+        name = self._expect(NonKwSymbolToken).chars
+        return DeclarationNode(type, name, None)
 
     # while_statement: while expr do block_statement
     def while_statement(self) -> WhileNode:
@@ -225,31 +274,51 @@ class Parser:
             left = BinOpNode(left, op, right)
         return left
 
-    # TODO unary
-    # factor: primary | LPAREN expr RPAREN
+    # factor: primary
     def factor(self) -> ExpressionNode:
-        if isinstance(self.file.current_token(), LParenToken):
-            self._expect(LParenToken)
-            expr = self.expr()
-            self._expect(RParenToken)
-            return expr
-
         return self.primary()
 
-    # primary: atom
+    # primary: atom ((LPAREN args RPAREN) | (DOT SYMBOL))*
     def primary(self):
-        return self.atom()
+        left = self.atom()
+
+        possible_tokens = [LParenToken, DotToken]
+        while any(isinstance(self.file.current_token(), type) for type in possible_tokens):
+            if isinstance(self.file.current_token(), LParenToken):
+                self._expect(LParenToken)
+                args = self.arg_list()
+                self._expect(RParenToken)
+                left = FuncCallNode(left, args)
+            elif isinstance(self.file.current_token(), DotToken):
+                self._expect(DotToken)
+                attr = self._expect(NonKwSymbolToken).chars
+                left = MemberNode(left, attr)
+
+        return left
 
     # TODO strings, floats
-    # atom: SYMBOL | TRUE | FALSE | INTEGER
+    # atom: (NEW SYMBOL LPAREN arg_list RPAREN) | (LPAREN expr RPAREN) | SYMBOL | TRUE | FALSE | INTEGER
     def atom(self):
         current_token = self.file.current_token()
         match current_token:
+            case NewToken() as token:
+                self._expect(NewToken)
+                name = self._expect(NonKwSymbolToken).chars
+                self._expect(LParenToken)
+                args = self.arg_list()
+                self._expect(RParenToken)
+                return NewNode(name, args)
+            case LParenToken() as token:
+                self._expect(LParenToken)
+                expr = self.expr()
+                self._expect(RParenToken)
+                return expr
             case IntLiteralToken() as token:
                 self._expect(IntLiteralToken)
                 return IntLiteralNode(token.value)
             case NonKwSymbolToken() as token:
-                return self.var_atom()
+                name = self._expect(NonKwSymbolToken).chars
+                return VariableNode(name)
             case TrueToken():
                 self._expect(TrueToken)
                 return BoolLiteralNode(True)
@@ -272,22 +341,6 @@ class Parser:
             exprs.append(expr)
         
         return exprs
-
-    # TODO attributes
-    # var_atom: SYMBOL ((LPAREN arg_list RPAREN))*
-    def var_atom(self):
-        name = self._expect(NonKwSymbolToken).chars
-        left = VariableNode(name)
-
-        possible_tokens = [LParenToken]
-        while any(isinstance(self.file.current_token(), type) for type in possible_tokens):
-            if isinstance(self.file.current_token(), LParenToken):
-                self._expect(LParenToken)
-                args = self.arg_list()
-                self._expect(RParenToken)
-                left = FuncCallNode(left.name, args)
-        return left
-
 
     def _expect(
         self,

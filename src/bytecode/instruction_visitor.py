@@ -1,3 +1,5 @@
+from bytecode.instructions import *
+
 class InstructionVisitorException(Exception):
     pass
 
@@ -104,4 +106,13 @@ class DefaultInstructionVisitor(InstructionVisitor):
         self.visit_if_exists(instruction.next)
 
     def visit_Return(self, instruction):
+        self.visit_if_exists(instruction.next)
+
+    def visit_SetField(self, instruction: GetField):
+        self.visit_if_exists(instruction.next)
+
+    def visit_GetField(self, instruction: GetField):
+        self.visit_if_exists(instruction.next)
+
+    def visit_NewObject(self, instruction: NewObject):
         self.visit_if_exists(instruction.next)

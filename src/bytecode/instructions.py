@@ -29,7 +29,10 @@ InstructionType = Enum("InstructionType", [
     "CALL",
     "CALL_NATIVE",
     "RETURN",
-    "ENTER"
+    "ENTER",
+    "NEWOBJECT",
+    "GETFIELD",
+    "SETFIELD"
 ], start=0)
 
 class Instruction:
@@ -79,6 +82,30 @@ class LoadGlobalInt(Instruction):
         return super().__repr__() + f"({self.var})"
 
 class StoreLocalInt(Instruction):
+    def __init__(self, var, next=None):
+        super().__init__(next)
+        self.var = var
+
+    def __repr__(self):
+        return super().__repr__() + f"({self.var})"
+
+class NewObject(Instruction):
+    def __init__(self, number_of_fields, next=None):
+        super().__init__(next)
+        self.number_of_fields = number_of_fields
+
+    def __repr__(self):
+        return super().__repr__() + f"({self.number_of_fields})"
+
+class SetField(Instruction):
+    def __init__(self, var, next=None):
+        super().__init__(next)
+        self.var = var
+
+    def __repr__(self):
+        return super().__repr__() + f"({self.var})"
+
+class GetField(Instruction):
     def __init__(self, var, next=None):
         super().__init__(next)
         self.var = var
