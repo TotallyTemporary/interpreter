@@ -199,9 +199,10 @@ class Interpreter:
                 for index in range(func_args):
                     cf.locals[index] = cf.value_stack.pop()
             elif instr == InstructionType.CALL.value:
+                global_index = get_u16(self.bytecode, cf.ip); cf.ip += 2
                 arg_count = get_u8(self.bytecode, cf.ip); cf.ip += 1
                 args = list(cf.value_stack.pop() for _ in range(arg_count))
-                func_entrypoint = cf.value_stack.pop()
+                func_entrypoint = self.globals[global_index]
 
                 new_frame = Frame(func_entrypoint)
                 self.call_stack.append(new_frame)
@@ -209,11 +210,12 @@ class Interpreter:
                 for arg in args:
                     new_frame.value_stack.append(arg)
             elif instr == InstructionType.CALL_NATIVE.value:
+                global_index = get_u16(self.bytecode, cf.ip); cf.ip += 2
                 arg_count = get_u8(self.bytecode, cf.ip); cf.ip += 1
                 args = list(cf.value_stack.pop() for _ in range(arg_count))
                 args.reverse()
-                native_index = cf.value_stack.pop()
 
+                native_index = self.globals[global_index]
                 func = self.natives[native_index]
                 return_value = func(*args)
                 cf.value_stack.append(return_value)

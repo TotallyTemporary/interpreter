@@ -269,12 +269,20 @@ class FunctionBytecodeGenerator(InstructionVisitor):
     def visit_CallFunc(self, instruction):
         self._log(f"Call ({instruction.arg_count} args)")
         self.bytecode.extend(to_bytes(InstructionType.CALL.value, 1))
+
+        self._add_global_int_placeholder(instruction.var)
+        self.bytecode.extend(to_bytes(0, 2))
+
         self.bytecode.extend(to_bytes(instruction.arg_count, 1))
         self.visit_if_exists(instruction.next)
 
     def visit_CallNativeFunc(self, instruction):
         self._log("CallNative")
         self.bytecode.extend(to_bytes(InstructionType.CALL_NATIVE.value, 1))
+
+        self._add_global_int_placeholder(instruction.var)
+        self.bytecode.extend(to_bytes(0, 2))
+
         self.bytecode.extend(to_bytes(instruction.arg_count, 1))
         self.visit_if_exists(instruction.next)
 

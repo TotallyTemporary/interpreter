@@ -198,13 +198,15 @@ class JumpIfNotZero(Instruction):
         return super().__repr__() + f"[{self.cond_instr}]"
 
 class CallFunc(Instruction):
-    def __init__(self, next=None, arg_count: int = 0):
+    def __init__(self, var, next=None, arg_count: int = 0):
         super().__init__(next)
+        self.var = var
         self.arg_count = arg_count
 
 class CallNativeFunc(Instruction):
-    def __init__(self, next=None, arg_count: int = 0):
+    def __init__(self, var, next=None, arg_count: int = 0):
         super().__init__(next)
+        self.var = var
         self.arg_count = arg_count
 
 class Return(Instruction):

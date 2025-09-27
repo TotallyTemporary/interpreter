@@ -103,24 +103,18 @@ class InstructionGenerator(AstVisitor):
 
         self.add_head(Dup()) # one goes in as a param to the constructor, other is the return value
 
-        # First, push function
-        constructor = node.constructor_symbol
-        self.add_head(LoadGlobalInt(constructor)) 
-        
-        # we need function before args
-        self.add_head(Swap())
-
         # Add args
         for arg in node.expressions:
             self.visit(arg)
 
         # Call constructor
+        constructor = node.constructor_symbol
         is_native = NativeFuncs.is_native_func(constructor)
         args_count = len(constructor.arg_symbols)
         if not is_native:
-            self.add_head(CallFunc(arg_count=args_count))
+            self.add_head(CallFunc(constructor, arg_count=args_count))
         else:
-            self.add_head(CallNativeFunc(arg_count=args_count))
+            self.add_head(CallNativeFunc(constructor, arg_count=args_count))
 
         self.add_head(Pop()) # ignore the return value of the constructor, it's a void zero anyway.
 
@@ -194,10 +188,6 @@ class InstructionGenerator(AstVisitor):
     def visit_FuncCallNode(self, node: FuncCallNode):
         is_native = NativeFuncs.is_native_func(node.symbol)
         is_member = isinstance(node.left, MemberNode)
-
-        # First, push function
-        self.add_head(LoadGlobalInt(node.symbol))
-
         args_count = len(node.expressions)
 
         # If a member, then `this` is the first argument
@@ -211,9 +201,9 @@ class InstructionGenerator(AstVisitor):
 
         # Call
         if not is_native:
-            self.add_head(CallFunc(arg_count=args_count))
+            self.add_head(CallFunc(node.symbol, arg_count=args_count))
         else:
-            self.add_head(CallNativeFunc(arg_count=args_count))
+            self.add_head(CallNativeFunc(node.symbol, arg_count=args_count))
 
     def visit_ClassDeclNode(self, node: ClassDeclNode):
         for var_decl in node.var_decls:
