@@ -218,3 +218,8 @@ class CallNativeFunc(Instruction):
 class Return(Instruction):
     def __init__(self, next=None):
         super().__init__(next)
+
+class Enter(Instruction):
+    def __init__(self, arg_count: int, next=None):
+        super().__init__(next)
+        self.arg_count = arg_count

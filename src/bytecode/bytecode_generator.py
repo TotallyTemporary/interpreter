@@ -313,6 +313,9 @@ class FunctionBytecodeGenerator(InstructionVisitor):
         self.bytecode.extend(to_bytes(instruction.number_of_fields, 1))
         self.visit_if_exists(instruction.next)
 
+    def visit_Enter(self, instruction: Enter):
+        self.visit_if_exists(instruction.next)
+
 class FunctionLocalVariableFinder(DefaultInstructionVisitor):
     def __init__(self, entrypoint: Entrypoint):
         self.entrypoint = entrypoint

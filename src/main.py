@@ -1,4 +1,10 @@
 import sys
+
+# profiling
+from contextlib import contextmanager
+import cProfile, pstats, io
+from pstats import SortKey
+
 from tokenizer.tokenizer import Tokenizer
 from tokenizer.tokens import *
 
@@ -16,7 +22,19 @@ from interpreter.interpreter import Interpreter
 import logging
 import sys
 
-if False: # show debug
+@contextmanager
+def profiled():
+    pr = cProfile.Profile()
+    pr.enable()
+    yield
+    pr.disable()
+    s = io.StringIO()
+    sortby = SortKey.CUMULATIVE
+    ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+    ps.print_stats()
+    log.debug(s.getvalue())
+
+if True: # show debug
     logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 log = logging.getLogger(__name__)
@@ -24,18 +42,11 @@ log = logging.getLogger(__name__)
 log.debug("---Tokenizer:")
 tokenizer = Tokenizer(
 """
-class Vector2i is
-    int x
-    int y
-
-    void new(int x, int y) is
-        this.x = x
-        this.y = y
-    void move() is
-        this.x = this.x + 1
-        this.y = this.y - 1
 void main() is
-    Vector2i pos = new Vector2i(0, 0)
+    int x = 0
+    while (x < 100000) do
+        x = x + 1
+    print(x)
 """)
 
 tokens = tokenizer.tokens()
@@ -71,7 +82,7 @@ for entrypoint in ir_generator.entrypoints:
     log.debug(f"Showing optimized function '{entrypoint.symbol.name}'")
     instruction = entrypoint.body
     while instruction != None:
-        print(instruction)
+        log.debug(instruction)
         instruction = instruction.next
 
 log.debug("---Bytecode:")
@@ -81,5 +92,6 @@ global_symbol_indices = bytecode_generator.get_global_symbol_indices()
 function_entrypoints = bytecode_generator.get_functions_entrypoint_mapping()
 
 log.debug("---Interpreter:")
-interpreter = Interpreter(bytecode, global_symbol_indices, function_entrypoints)
-interpreter.run()
+with profiled():
+    interpreter = Interpreter(bytecode, global_symbol_indices, function_entrypoints)
+    interpreter.run()

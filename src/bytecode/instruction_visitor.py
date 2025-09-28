@@ -116,3 +116,6 @@ class DefaultInstructionVisitor(InstructionVisitor):
 
     def visit_NewObject(self, instruction: NewObject):
         self.visit_if_exists(instruction.next)
+
+    def visit_Enter(self, instruction: Enter):
+        self.visit_if_exists(instruction.next)

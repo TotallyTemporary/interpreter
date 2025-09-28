@@ -78,13 +78,13 @@ class FuncOptimizer:
                         self._replace_instr(instr, NoOp(next=next_instr.next))
 
                     # load+store -> nop
-                    if isinstance(instr, LoadLocalInt) and isinstance(next_instr, StoreLocalInt):
+                    if isinstance(instr, LoadLocalInt) and isinstance(next_instr, StoreLocalInt) and instr.var == next_instr.var:
                         log.debug(f"Load+Store into Nop: Replacing '%s' and '%s' with nop", instr, next_instr)
                         self._replace_instr(instr, NoOp(next=instr.next))
                         self._replace_instr(next_instr, NoOp(next=next_instr.next))
 
                     # store+load -> dup+store
-                    if isinstance(instr, StoreLocalInt) and isinstance(next_instr, LoadLocalInt):
+                    if isinstance(instr, StoreLocalInt) and isinstance(next_instr, LoadLocalInt) and instr.var == next_instr.var:
                         log.debug(f"Store+Load into Dup+Store. '%s' and '%s'", instr, next_instr)
                         self._replace_instr(next_instr, NoOp(next=next_instr.next)) # remove load
                         self._replace_instr(instr, Dup(next=instr)) # add dup, next is store
@@ -99,14 +99,15 @@ class FuncOptimizer:
                 allowed_instr_types = [LoadLocalInt, LoadGlobalInt]
                 if not any(isinstance(instr, instr_type) for instr_type in allowed_instr_types):
                     continue
+                value = stack_after[-1]
 
                 # enumerate backwards to find closest place to dup from
-                for prev_index, (prev_instr, prev_before, prev_after) in reversed(
+                for prev_index, (prev_instr, prev_before) in reversed(
                     list(enumerate(
-                        zip(block[:index], before_lst[:index], after_lst[:index])
+                        zip(block[:index], before_lst[:index])
                     ))
                 ):
-                    if len(prev_after) > 0 and prev_after[-1] == stack_after[-1]:
+                    if len(prev_before) > 0 and prev_before[-1] == value:
                         # We'd really want to reuse this top-of-stack value instead of loading it again, can we do that?
                         if can_duplicate_top_value(
                             block[prev_index:index],
@@ -118,9 +119,8 @@ class FuncOptimizer:
                                 prev_instr,
                                 instr,
                             )
-                            dup = Dup(next=prev_instr.next)
-                            prev_instr.next = dup
                             self._replace_instr(instr, NoOp(next=instr.next))
+                            self._replace_instr(prev_instr, Dup(next=prev_instr))
                             return
 
             # Load with value already at top-of-stack, replace with a dup
@@ -202,17 +202,22 @@ def get_blocks(root_instr: Instruction):
         def visit_Jump(self, instruction):
             jump_targets.append(instruction.instruction)
             jump_instructions.append(instruction)
+            super().visit_Jump(instruction)
 
         def visit_JumpIfZero(self, instruction):
             jump_targets.append(instruction.cond_instr)
             jump_instructions.append(instruction)
+            super().visit_JumpIfZero(instruction)
 
         def visit_JumpIfNotZero(self, instruction):
             jump_targets.append(instruction.cond_instr)
             jump_instructions.append(instruction)
+            super().visit_JumpIfNotZero(instruction)
 
         def visit_Return(self, instruction):
             returns.append(instruction)
+            super().visit_Return(instruction)
+
     JumpsVisitor().visit(root_instr)
 
     starts = set(jump_targets)
@@ -262,10 +267,18 @@ def get_stack_values_for_block(block: list[Instruction], stack=None):
     before = []
     after = []
     current = stack or []
+
+    def _pop():
+        return current.pop() if len(current) > 0 else StackValue.unknown("UnknownStackBase")
+
     for instr in block:
         before.append(current.copy())
 
         match instr:
+            case Enter() as i:
+                # func starting, there should be args on the stack, let's add them
+                for index in reversed(range(i.arg_count)):
+                    current.append(StackValue.unknown(f"Arg{index}"))
             case LoadConstInt() as i:
                 current.append(StackValue.const(i.value))
             case LoadLocalInt() as i:
@@ -273,62 +286,62 @@ def get_stack_values_for_block(block: list[Instruction], stack=None):
             case LoadGlobalInt() as i:
                 current.append(globs[i.var])
             case StoreLocalInt() as i:
-                value = current.pop()
+                value = _pop()
                 locals[i.var] = value
             case NewObject() as i:
                 current.append(StackValue.unknown(expr=f"NewObject{i.number_of_fields}"))
             case SetField() as i:
-                current.pop()
-                current.pop()
+                _pop()
+                _pop()
             case GetField() as i:
-                current.pop()
+                _pop()
                 current.append(StackValue.unknown(expr=f"GetField({i.var.name})"))
             case Pop() as i:
-                current.pop()
+                _pop()
             case Dup() as i:
-                value = current.pop()
+                value = _pop()
                 current.append(value)
                 current.append(value)
             case Swap() as i:
-                value1 = current.pop()
-                value2 = current.pop()
+                value1 = _pop()
+                value2 = _pop()
                 current.append(value1)
                 current.append(value2)
             case Add() as i:
-                current.append(StackValue.add(current.pop(), current.pop()))
+                current.append(StackValue.add(_pop(), _pop()))
             case Sub() as i:
-                current.append(StackValue.sub(current.pop(), current.pop()))
+                current.append(StackValue.sub(_pop(), _pop()))
             case Mul() as i:
-                current.append(StackValue.mul(current.pop(), current.pop()))
+                current.append(StackValue.mul(_pop(), _pop()))
             case Div() as i:
-                current.append(StackValue.div(current.pop(), current.pop()))
+                current.append(StackValue.div(_pop(), _pop()))
             case Equals():
-                current.append(StackValue.eq(current.pop(), current.pop()))
+                current.append(StackValue.eq(_pop(), _pop()))
             case NotEquals():
-                current.append(StackValue.neq(current.pop(), current.pop()))
+                current.append(StackValue.neq(_pop(), _pop()))
             case LessThan():
-                current.append(StackValue.lt(current.pop(), current.pop()))
+                current.append(StackValue.lt(_pop(), _pop()))
             case LessThanEquals():
-                current.append(StackValue.lte(current.pop(), current.pop()))
+                current.append(StackValue.lte(_pop(), _pop()))
             case GreaterThan():
-                current.append(StackValue.gt(current.pop(), current.pop()))
+                current.append(StackValue.gt(_pop(), _pop()))
             case GreaterThanEquals():
-                current.append(StackValue.gte(current.pop(), current.pop()))
+                current.append(StackValue.gte(_pop(), _pop()))
             case Or():
-                current.append(StackValue.oor(current.pop(), current.pop()))
+                current.append(StackValue.oor(_pop(), _pop()))
             case And():
-                current.append(StackValue.aand(current.pop(), current.pop()))
+                current.append(StackValue.aand(_pop(), _pop()))
             case CallFunc() as i:
                 for _ in range(i.arg_count):
-                    current.pop()
+                    _pop()
 
                 current.append(StackValue.unknown(expr=f"FuncCall"))
             case CallNativeFunc() as i:
                 for _ in range(i.arg_count):
-                    current.pop()
+                    _pop()
                 current.append(StackValue.unknown(expr=f"NativeFuncCall"))
             case Return() as i:
-                current.pop()
+                _pop()
         after.append(current.copy())
     return before, after
 

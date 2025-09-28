@@ -178,6 +178,12 @@ class InstructionGenerator(AstVisitor):
         )
         self.entrypoints.append(entrypoint)
 
+        self.add_head(Enter(arg_count=len(param_symbols))) # just metadata
+
+        # Store args into locals
+        for symbol in param_symbols:
+            self.add_head(StoreLocalInt(symbol))
+
         self.visit(node.body)
 
         # void functions might not have return statements at all, but we still want to return something, even if it's just to pop it later.

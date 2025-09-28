@@ -194,10 +194,6 @@ class Interpreter:
 
                 # reserve space for args and locals
                 cf.locals = [None] * (func_args + func_locals)
-
-                # take our args off the stack and into locals list
-                for index in range(func_args):
-                    cf.locals[index] = cf.value_stack.pop()
             elif instr == InstructionType.CALL.value:
                 global_index = get_u16(self.bytecode, cf.ip); cf.ip += 2
                 arg_count = get_u8(self.bytecode, cf.ip); cf.ip += 1
