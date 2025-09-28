@@ -225,11 +225,11 @@ class Interpreter:
 
                 if len(self.call_stack) == 0:
                     log.debug("Main function returned!")
-                    log.debug(f"Return value: {return_value}")
+                    # log.debug(f"Return value: {return_value}")
 
-                    log.debug("Heap: ")
-                    for idx, obj in enumerate(self.heap):
-                        log.debug("%s %s", idx, getattr(obj, "fields", None))
+                    # log.debug("Heap: ")
+                    # for idx, obj in enumerate(self.heap):
+                    #     log.debug("%s %s", idx, getattr(obj, "fields", None))
                     break
                 
                 caller_frame = self.call_stack[-1]

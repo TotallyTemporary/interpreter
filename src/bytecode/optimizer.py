@@ -39,12 +39,12 @@ class FuncOptimizer:
             # let's check if we've made any changes with our optimizations
             if not all(instr1 == instr2 for instr1, instr2 in zip(self.instructions, new_instructions)):
                 last_change_made_in_round = rounds
-            if rounds - last_change_made_in_round >= len(optimizations):
+            if rounds - last_change_made_in_round >= len(optimizations) * 2:
                 break
 
             self.instructions = new_instructions
             self.blocks = get_blocks(self.entrypoint.body)
-    
+
     def remove_nops(self):
         """Remove no-ops, code which does nothing. This includes literal no-ops, as well as code like load+pop."""
         for instructions in self.blocks:
@@ -77,35 +77,63 @@ class FuncOptimizer:
                         log.debug(f"Eliding load into pop: Replacing '%s' with nop", instr)
                         self._replace_instr(instr, NoOp(next=next_instr.next))
 
-                    # Store then load -> dup then store
+                    # load+store -> nop
                     if isinstance(instr, LoadLocalInt) and isinstance(next_instr, StoreLocalInt):
-                        if instr.var == next_instr.var:
-                            log.debug(f"Eliding store then load: Replacing load with dup. '%s', '%s'", instr, next_instr)
-                            self._replace_instr(instr, Dup(next=instr))
-                            instr.next = next_instr.next
+                        log.debug(f"Load+Store into Nop: Replacing '%s' and '%s' with nop", instr, next_instr)
+                        self._replace_instr(instr, NoOp(next=instr.next))
+                        self._replace_instr(next_instr, NoOp(next=next_instr.next))
+
+                    # store+load -> dup+store
+                    if isinstance(instr, StoreLocalInt) and isinstance(next_instr, LoadLocalInt):
+                        log.debug(f"Store+Load into Dup+Store. '%s' and '%s'", instr, next_instr)
+                        self._replace_instr(next_instr, NoOp(next=next_instr.next)) # remove load
+                        self._replace_instr(instr, Dup(next=instr)) # add dup, next is store
+                        instr.next = next_instr.next # store.next
 
     def duplications(self):
         for block in self.blocks:
             before_lst, after_lst = get_stack_values_for_block(block)
 
+            # Double use of a load, add a dup to original load
             for index, (instr, stack_before, stack_after) in enumerate(zip(block, before_lst, after_lst)):
-                # only optimize for these types
                 allowed_instr_types = [LoadLocalInt, LoadGlobalInt]
                 if not any(isinstance(instr, instr_type) for instr_type in allowed_instr_types):
                     continue
 
-                # If there exists a instruction that adds a value to the stack
-                if stack_before == [] and len(stack_after) == 1:
-                    value = stack_after[0]
-                    # And there exists an instruction before it that adds that value to the stack
-                    for prev_instr, prev_after in zip(block[:index], after_lst[:index]):
-                        if len(prev_after) == 1 and prev_after[0] == value:
-                            # We reuse the previous value using a Dup and remove the second load.
-                            log.debug(f"Double use of the same load, add a Dup. '%s' and '%s'", prev_instr, instr)
+                # enumerate backwards to find closest place to dup from
+                for prev_index, (prev_instr, prev_before, prev_after) in reversed(
+                    list(enumerate(
+                        zip(block[:index], before_lst[:index], after_lst[:index])
+                    ))
+                ):
+                    if len(prev_after) > 0 and prev_after[-1] == stack_after[-1]:
+                        # We'd really want to reuse this top-of-stack value instead of loading it again, can we do that?
+                        if can_duplicate_top_value(
+                            block[prev_index:index],
+                            start_stack=prev_before,
+                            end_stack=after_lst[index - 1],
+                        ):
+                            log.debug(
+                                f"Double use of the same load, add a Dup. '%s' and '%s'",
+                                prev_instr,
+                                instr,
+                            )
                             dup = Dup(next=prev_instr.next)
                             prev_instr.next = dup
                             self._replace_instr(instr, NoOp(next=instr.next))
                             return
+
+            # Load with value already at top-of-stack, replace with a dup
+            for index, (instr, stack_before, stack_after) in enumerate(zip(block, before_lst, after_lst)):
+                allowed_instr_types = [LoadLocalInt, LoadGlobalInt]
+                if not any(isinstance(instr, instr_type) for instr_type in allowed_instr_types):
+                    continue
+
+                if len(stack_after) >= 2:
+                    if stack_after[-1] == stack_after[-2]:
+                        log.debug(f"Double load, replace with a dup '%s'.", instr)
+                        self._replace_instr(instr, Dup(next=instr.next))
+                        return
 
     def constant_folding(self):
         for block in self.blocks:
@@ -132,7 +160,6 @@ class FuncOptimizer:
                         Pop(),
                         LoadConstInt(value=stack_after[-1].key)
                     ])
-
 
     def _replace_instr(self, instr: Instruction, replace_with: Instruction):
         for node in self.instructions:
@@ -227,12 +254,14 @@ def get_instruction_list(root_instr: Instruction):
     ListerVisitor().visit(root_instr)
     return all_instructions
 
-def get_stack_values_for_block(block: list[Instruction]):
+def get_stack_values_for_block(block: list[Instruction], stack=None):
+    """Get the expected stack values for each instruction in this block.
+    Returns two arrays, before and after. These can be zipped with block to result with instruction, stack state before it, stack state after it."""
     globs = defaultdict(lambda: StackValue.unknown(expr="UnknownGlobal"))
     locals = defaultdict(lambda: StackValue.unknown(expr="UnknownLocal"))
     before = []
     after = []
-    current = []
+    current = stack or []
     for instr in block:
         before.append(current.copy())
 
@@ -290,14 +319,29 @@ def get_stack_values_for_block(block: list[Instruction]):
             case And():
                 current.append(StackValue.aand(current.pop(), current.pop()))
             case CallFunc() as i:
-                args = (current.pop() for _ in range(i.arg_count))
-                entrypoint = current.pop()
+                for _ in range(i.arg_count):
+                    current.pop()
+
                 current.append(StackValue.unknown(expr=f"FuncCall"))
             case CallNativeFunc() as i:
-                args = (current.pop() for _ in range(i.arg_count))
-                entrypoint = current.pop()
+                for _ in range(i.arg_count):
+                    current.pop()
                 current.append(StackValue.unknown(expr=f"NativeFuncCall"))
             case Return() as i:
                 current.pop()
         after.append(current.copy())
     return before, after
+
+def can_duplicate_top_value(instr_lst: list[Instruction], start_stack: list[StackValue], end_stack: list[StackValue]):
+    """Returns True if you can duplicate the top value and it'll persist throughout these instructions."""
+    try:
+        # duplicate the top value
+        marker = start_stack[-1]
+        _, after = get_stack_values_for_block(instr_lst, stack=[*start_stack, marker])
+
+        # if the resulting stack (after last instruction) is what we'd expect + marker, it's persisted
+        if after[-1] == [*end_stack, marker]:
+            return True
+    except Exception:
+        pass
+    return False

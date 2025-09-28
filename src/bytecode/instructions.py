@@ -203,11 +203,17 @@ class CallFunc(Instruction):
         self.var = var
         self.arg_count = arg_count
 
+    def __repr__(self):
+        return super().__repr__() + f"[{self.var} ({self.arg_count})]"
+
 class CallNativeFunc(Instruction):
     def __init__(self, var, next=None, arg_count: int = 0):
         super().__init__(next)
         self.var = var
         self.arg_count = arg_count
+
+    def __repr__(self):
+        return super().__repr__() + f"[{self.var} ({self.arg_count})]"
 
 class Return(Instruction):
     def __init__(self, next=None):
